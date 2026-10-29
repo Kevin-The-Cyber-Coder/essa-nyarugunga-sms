@@ -16,6 +16,8 @@ const seedDatabase = require('./utils/seedDatabase');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./config/rateLimit');
 const notifier = require('./utils/notifier');
+const { startReminderScheduler } = require('./utils/reminderScheduler');
+const { startAnnouncementScheduler } = require('./utils/announcementBroadcast');
 const User = require('./models/User');
 
 if (!process.env.JWT_SECRET) {
@@ -48,6 +50,7 @@ app.use('/api', require('./routes/userRoutes'));
 app.use('/api', require('./routes/contactRoutes'));
 app.use('/api', require('./routes/subscriptionRoutes'));
 app.use('/api', require('./routes/announcementRoutes'));
+app.use('/api', require('./routes/classResourceRoutes'));
 app.use('/api', require('./routes/newsRoutes'));
 app.use('/api', require('./routes/galleryRoutes'));
 // Ahead of admissionRoutes so the richer admin endpoints match first. The
@@ -112,6 +115,12 @@ connectDB()
       // Releases whatever quiet hours deferred. The timer is unref'd inside,
       // so it never holds a short-lived test process open on shutdown.
       notifier.startFlushLoop();
+      // Promotes scheduled announcements whose time has arrived.
+      startAnnouncementScheduler();
+
+      // Nudges pupils and guardians about assignments and exams that fall due
+      // within the next day.
+      startReminderScheduler();
     });
   })
   .catch(err => {

@@ -122,8 +122,30 @@ router.get('/messages/conversations', authMiddleware, async (req, res) => {
       if (archived === wantArchived) visible.push(conv);
     }
 
-    const unread = await unreadCountsFor(userId, visible.map(c => c._id));
-    const shaped = visible.map(conv => {
+    // Server-side narrowing so the client does not have to hold the whole list
+    // to filter it. `q` matches a group's name/description or a direct peer's
+    // name; the rest are exact matches on stored fields.
+    const q = String(req.query.q || '').trim().toLowerCase();
+    const category = String(req.query.category || '').trim();
+    const classId = String(req.query.classId || '').trim();
+    const typeFilter = String(req.query.type || '').trim();
+    const filtered = visible.filter(conv => {
+      if (category && String(conv.category || '') !== category) return false;
+      if (classId && toId(conv.classId) !== classId) return false;
+      if (typeFilter && conv.type !== typeFilter) return false;
+      if (q) {
+        if (conv.type === 'group') {
+          return String(conv.name || '').toLowerCase().includes(q)
+            || String(conv.description || '').toLowerCase().includes(q);
+        }
+        const others = (conv.participants || []).filter(p => toId(p.userId) !== toId(userId));
+        return others.some(p => String(p.name || '').toLowerCase().includes(q));
+      }
+      return true;
+    });
+
+    const unread = await unreadCountsFor(userId, filtered.map(c => c._id));
+    const shaped = filtered.map(conv => {
       const count = unread.get(toId(conv._id)) || 0;
       if (!participantOf(conv, userId)?.isArchived) totalUnread += count;
       return shapeConversation(conv, userId, count);
@@ -507,6 +529,28 @@ router.put('/messages/conversations/:id/read', authMiddleware, async (req, res) 
     }
 
     res.json({ success: true, lastReadAt: now });
+  } catch (error) {
+    fail(res, 500, error.message);
+  }
+});
+
+// ─── clear chat (for me) ─────────────────────────────────────────────────────
+// Clearing removes the history from the caller's own view only. The other
+// participants keep their copy, which is why this writes to `deletedFor`
+// rather than deleting the records.
+
+router.delete('/messages/conversations/:id/messages', authMiddleware, async (req, res) => {
+  try {
+    const conversation = await loadConversation(req.params.id);
+    if (!conversation) return fail(res, 404, 'Conversation not found.');
+    if (!isMember(conversation, req.userId)) return fail(res, 403, 'You are not part of this conversation.');
+
+    const result = await Message.updateMany(
+      { conversationId: conversation._id, deletedFor: { $ne: req.userId } },
+      { $addToSet: { deletedFor: req.userId } }
+    );
+
+    res.json({ success: true, cleared: result.modifiedCount });
   } catch (error) {
     fail(res, 500, error.message);
   }

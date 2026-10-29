@@ -14,6 +14,9 @@ const requireRole = require('../middleware/roleCheck');
 const { uploadAssignment, uploadLesson } = require('../config/upload');
 const { authorizeStudentAccess, teacherOwnsClass } = require('../utils/access');
 const { buildWeightIndex, averageFor, letterFor } = require('../utils/grading');
+const { notifyClass } = require('../utils/classNotify');
+const { notify } = require('../utils/notifier');
+const ParentProfile = require('../models/ParentProfile');
 
 const router = express.Router();
 
@@ -725,6 +728,112 @@ router.get('/teacher/attendance/:classId', authMiddleware, async (req, res) => {
     }
     const attendance = await Attendance.find(query).populate('studentId', 'fullName studentId');
     res.json(attendance);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ==================== CLASS COMMUNICATION ====================
+
+// Nudges the class about an assignment. Staff may nudge any assignment; a
+// teacher only the ones they set. The audience is the class's pupils and their
+// guardians, resolved by the same helper the reminder scheduler uses so the
+// manual and automatic paths reach exactly the same people.
+router.post('/teacher/assignments/:id/remind', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id).select('title dueDate classId teacherId');
+    if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
+    if (!assignment.classId) return res.status(400).json({ message: 'This assignment is not tied to a class.' });
+
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    if (!isAdmin && String(assignment.teacherId) !== String(req.userId)) {
+      return res.status(403).json({ message: 'You did not set this assignment.' });
+    }
+
+    const due = assignment.dueDate ? new Date(assignment.dueDate) : null;
+    const reached = await notifyClass({
+      classIds: [assignment.classId],
+      type: 'homework',
+      title: `Reminder: ${assignment.title}`,
+      body: due && due.getTime() > Date.now()
+        ? `Due ${due.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`
+        : 'Please submit your work.',
+      link: '/assignments',
+      actorId: req.userId,
+      actorName: req.userName || 'Your teacher'
+    });
+
+    res.json({ success: true, reached: reached.delivered, students: reached.studentCount, parents: reached.parentCount });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Broadcasts exam details to every class sitting it. A teacher must share at
+// least one of those classes; admins may send to any.
+router.post('/teacher/exams/:id/announce', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id).select('name type examDate instructions classIds');
+    if (!exam) return res.status(404).json({ message: 'Exam not found' });
+
+    const classIds = (exam.classIds || []).map(String);
+    if (!classIds.length) return res.status(400).json({ message: 'This exam is not assigned to any class.' });
+
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    if (!isAdmin) {
+      const owned = await Promise.all(classIds.map((id) => teacherOwnsClass(req.userId, id)));
+      if (!owned.some(Boolean)) return res.status(403).json({ message: 'You do not teach any of the classes sitting this exam.' });
+    }
+
+    const when = exam.examDate
+      ? new Date(exam.examDate).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : 'to be announced';
+    const reached = await notifyClass({
+      classIds,
+      type: 'exam',
+      title: `Exam: ${exam.name}`,
+      body: `${exam.type || 'Exam'} on ${when}.${exam.instructions ? ` ${String(exam.instructions).slice(0, 140)}` : ''}`,
+      link: '/exams',
+      actorId: req.userId,
+      actorName: req.userName || 'Examinations'
+    });
+
+    res.json({ success: true, reached: reached.delivered, students: reached.studentCount, parents: reached.parentCount });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// A per-student academic note. Goes to the pupil and, in the same breath, to
+// their guardians, because feedback a parent never sees is half-delivered.
+router.post('/teacher/feedback', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+  try {
+    const { studentId, subject, title, message } = req.body;
+    const note = String(message || '').trim();
+    if (!studentId || !note) return res.status(400).json({ message: 'studentId and a feedback message are required.' });
+
+    const student = await Student.findById(studentId).select('_id fullName userId classId');
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    if (!isAdmin && !(await authorizeStudentAccess(req, student))) {
+      return res.status(403).json({ message: 'You are not assigned to this student.' });
+    }
+
+    const parentUserIds = await ParentProfile.find({ children: student._id }).distinct('userId');
+    const recipients = [...new Set([student.userId, ...parentUserIds].filter(Boolean).map(String))];
+
+    const payload = {
+      type: 'academic_feedback',
+      title: title ? String(title).slice(0, 120) : `Feedback for ${student.fullName || 'your child'}${subject ? ` - ${subject}` : ''}`,
+      body: note.slice(0, 500),
+      link: '/grades',
+      actorId: req.userId,
+      actorName: req.userName || 'A teacher'
+    };
+
+    const results = await Promise.all(recipients.map((userId) => notify({ ...payload, userId })));
+    res.json({ success: true, reached: results.filter((r) => !r.skipped).length });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

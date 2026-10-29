@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
 import { notificationApi } from './notificationApi';
+import { getNotifyPrefs, setNotifyPref, ensureNotificationPermission, playPing } from '../chat/notifyClient';
 import './notifications.css';
 
 const CHANNEL_LABELS = {
@@ -17,6 +18,8 @@ const TYPE_LABELS = {
   reply: 'Replies',
   announcement: 'Announcements',
   assignment: 'Assignments',
+  homework: 'Homework reminders',
+  academic_feedback: 'Academic feedback',
   exam: 'Exams',
   fee: 'Fee reminders',
   attendance: 'Attendance',
@@ -41,6 +44,21 @@ const NotificationPreferences = ({ onSaved }) => {
   const [prefs, setPrefs] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [device, setDevice] = useState(() => getNotifyPrefs());
+
+  const toggleDevice = async (key) => {
+    const next = { ...device, [key]: !device[key] };
+    if (key === 'desktop' && next.desktop) {
+      const perm = await ensureNotificationPermission();
+      if (perm !== 'granted') {
+        Swal.fire({ title: 'Desktop notifications blocked', text: 'Allow notifications for this site in your browser settings.', icon: 'info', confirmButtonColor: 'var(--navy)' });
+        return;
+      }
+    }
+    setDevice(next);
+    setNotifyPref(key, next[key]);
+    if (key === 'sound' && next.sound) playPing();
+  };
 
   useEffect(() => {
     notificationApi.getPreferences().then((d) => {
@@ -199,6 +217,29 @@ const NotificationPreferences = ({ onSaved }) => {
             </span>
           </div>
         )}
+      </div>
+
+      <div style={{ marginBottom: 18, paddingTop: 14, borderTop: '1px solid var(--border, #e3e8ee)' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>On this device</div>
+        <p style={{ margin: '0 0 8px', color: 'var(--text-muted)', fontSize: 12 }}>
+          Alerts for messages that arrive while you are in another thread or the tab is in the background.
+        </p>
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer' }}>
+            <span className="nx-switch">
+              <input type="checkbox" checked={!!device.desktop} onChange={() => toggleDevice('desktop')} />
+              <span className="nx-knob" />
+            </span>
+            Desktop notifications
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className="nx-switch">
+              <input type="checkbox" checked={!!device.sound} onChange={() => toggleDevice('sound')} />
+              <span className="nx-knob" />
+            </span>
+            <span style={{ fontWeight: 600, color: 'var(--text)' }}>Notification sound</span>
+          </label>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>

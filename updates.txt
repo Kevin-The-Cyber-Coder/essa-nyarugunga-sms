@@ -370,3 +370,132 @@ High Contrast Mode
 Font Size Adjustment
 
 Color Blind Friendly Palettes
+
+9. ADVANCED MESSAGING SYSTEM INTEGRATION (12-phase build)
+Status legend: [DONE] shipped and wired into a portal | [PARTIAL] backend and/or partial UI exists | [TODO] not built yet
+Where we are: PHASES 9-12 implemented (teacher comms, class resources, DnD/upload progress, advanced search). Remaining [PARTIAL]/[TODO] items are listed inline and in 9.13.
+Existing modules: backend/routes/messageRoutes.js, conversationRoutes.js, fileRoutes.js, notificationRoutes.js, announcementRoutes.js; backend/socket/index.js; backend/utils/chat.js, access.js, presence.js, notifier.js, storage.js; frontend/src/components/chat/* (ChatModal, MessagingPanel, ConversationList, MessageBubble, MessageComposer, ContactDirectory, useChatHub, useChatSocket, chatApi).
+Portals wired: Student, Parent, Teacher, Super Admin, Academic Admin, Discipline Admin, Accounts Admin.
+
+9.1 PHASE 1 - User-to-User Messaging
+Student <-> Student [PARTIAL] classmates only (directory scope); no cross-class student chat
+Student <-> Teacher [DONE]
+Student <-> Parent/Guardian [TODO] student directory excludes parents
+Teacher <-> Parent/Guardian [TODO] teacher directory excludes parents
+Teacher <-> Teacher [DONE]
+Teacher <-> School Administration [DONE]
+Parent <-> Administration [DONE]
+Administration <-> Staff [DONE]
+Admin <-> Everyone [DONE]
+Search users by name [DONE], by ID/class/department [DONE] (/messages/users)
+Online/offline status [DONE] (presence rooms)
+Last seen [DONE]
+User profile inside chat [PARTIAL] no profile drawer/quick-view; add contact info panel from thread header
+Block/unblock user [DONE] Block model; enforced in canContact and directory; header menu wired
+
+9.2 PHASE 2 - Chat Features
+One-to-one conversations [DONE]
+Group conversations [DONE]
+Class groups [DONE] auto-managed from Class roster
+Subject groups [PARTIAL] category supported, created manually only
+Department groups [PARTIAL] category supported, created manually only
+Staff groups [PARTIAL] category supported, created manually only
+Custom groups [DONE]
+Group owner/admin [DONE]
+Add members [DONE] / Remove members [DONE]
+Rename group [DONE] / Group description [DONE]
+Group profile picture [PARTIAL] avatar field + PUT accepts avatar, no upload UI
+Leave group [DONE] / Delete group [DONE]
+Archive conversation [DONE] / Pin [DONE] / Mute [DONE]
+Manage group permissions [TODO] no per-role member permission editor
+
+9.3 PHASE 3 - Message Types
+Text [DONE] / Images [DONE] / Documents [DONE] / PDFs [DONE] / Word-Excel [DONE]
+Voice messages [DONE] MediaRecorder composer + audio bubble player; audio bucket in storage
+Links [PARTIAL] type "link" exists, no auto link-preview/unfurl
+Location sharing [PARTIAL] type "location" exists, no picker/UI
+Contact sharing [PARTIAL] type "contact" exists, no picker/UI
+Announcements [DONE] / System-generated [DONE]
+GIF support [TODO] / Stickers [TODO]
+
+9.4 PHASE 4 - Message Actions
+Reply [DONE] / Forward [DONE] / Copy [DONE]
+Edit [DONE] / Delete for everyone [DONE] / Delete for yourself [DONE]
+Pin message [DONE] / Star-save [DONE] / Bookmark [DONE via star]
+React to message [DONE] / Report message [DONE]
+Mark unread [DONE] PUT /messages/:id/unread + bubble menu item
+Select multiple messages [PARTIAL] bulk endpoint (/messages/bulk) exists, no multi-select UI
+Clear chat [DONE] (per-conversation clear for me) endpoint + header menu
+Resend failed message [TODO] "failed" status modelled, no resend action
+
+9.5 PHASE 5 - Message Status
+Sending [DONE] / Sent [DONE] / Delivered [DONE] / Read [DONE] / Failed [PARTIAL]
+Read receipts (double tick) [DONE] / Delivery timestamps [DONE]
+Group roll-up status [DONE] (read only when all recipients read)
+
+9.6 PHASE 6 - Notifications
+New message [DONE] / Group message [DONE] / Mention [DONE] / Reply [DONE] / Announcement [DONE]
+Assignment/Exam/Fee/Attendance [PARTIAL] types exist; triggers depend on those modules
+Push notifications [TODO] notifier stub "not_configured"
+Email notifications [DONE]
+SMS notifications [TODO] notifier stub "not_configured"
+Notification preferences [DONE] / Quiet hours [DONE] / Mute conversation [DONE]
+Desktop notifications [TODO] / Notification sound [TODO]
+Unread message badge [DONE]
+
+9.7 PHASE 7 - School Announcements
+Principal/Teacher/Class/Exam/Holiday/Emergency/Fee/Meeting/Event announcements [DONE]
+Targeting: all/classes/grades/teachers/parents/staff/individuals [DONE]
+Announcement read receipts [DONE] readBy list, PUT /announcements/:id/read, /receipts, readCount
+Announcement scheduling (post later, auto-expire) [DONE] scheduledAt/publishedAt + scheduler loop; auto-expire not implemented
+Announcement search [DONE] GET /announcements?q= + admin search box
+
+9.8 PHASE 8 - Parent Communication
+Message teachers/class teachers/administration [DONE]
+Receive academic updates [PARTIAL] / Attendance alerts [TODO] / Discipline alerts [PARTIAL] / Fee reminders [PARTIAL] / Announcements [DONE] / Exam results [TODO]
+
+9.9 PHASE 9 - Teacher Communication (current)
+Contact students [DONE] / Contact other teachers [DONE] / Contact administration [DONE]
+Contact parents [DONE] directory includes parents/guardians
+Message entire classes [DONE] via auto class group
+Send assignment reminders [DONE] POST /teacher/assignments/:id/remind + reminderScheduler
+Send exam information [DONE] POST /teacher/exams/:id/announce
+Send homework notifications [DONE] via notifyClass type 'homework'
+Send academic feedback [DONE] POST /teacher/feedback (pupil + guardians)
+
+9.10 PHASE 10 - Class Messaging
+Auto-created class space (class teacher, subject teachers, students, admins) [DONE]
+Class announcements [DONE]
+Class discussions [DONE]
+Homework notifications [DONE] notifyClass to class + guardians
+Exam reminders [DONE] reminderScheduler + teacher announce route
+Important documents [DONE] models/ClassResource + ClassResourcesPanel in class group
+
+9.11 PHASE 11 - File & Document Sharing
+PDF/DOC/DOCX/XLS/XLSX/PPT/PPTX/JPG/PNG/ZIP [DONE]
+File preview [PARTIAL] inline images only; docs open in new tab
+Download [DONE] / File size limits [DONE] / File type validation [DONE]
+Upload progress [DONE] XHR upload.onprogress percentage bar
+Virus/malware scanning [PARTIAL] magic-byte sniffing only; hook left for ClamAV
+Storage management [PARTIAL] provider abstraction (local/s3/cloudinary); no quota/cleanup UI
+Drag-and-drop upload [DONE] MessageComposer drop zone + overlay
+
+9.12 PHASE 12 - Advanced Search
+Search messages [DONE] (/messages/search: q, sender, date, type, unread, starred, hasAttachment)
+Search conversations [DONE] GET /messages/conversations?q=&category=&classId=&type=
+Search users [DONE] / Search groups [DONE] / Search files [DONE] (attachment name + kind)
+Search announcements [DONE] GET /announcements?q= (title/content, regex-escaped)
+Filters: sender [DONE], date [DONE], class [DONE], message type [DONE], file type [DONE], unread [DONE], attachments [DONE]
+
+9.13 Cross-cutting gaps to close for a complete messaging suite
+- Wire the messaging panel into the Teacher, Academic Admin, Discipline Admin and Accounts Admin portals. [DONE]
+- Add parents to the teacher/student contact directories (canContact + messagingDirectory in backend/utils/access.js). [DONE]
+- Voice messages: composer record button + playback bubble. [DONE - build verified]
+- Block/unblock model and enforcement in canContact. [DONE - build verified]
+- Announcement read receipts + scheduling. [DONE - build verified]
+- Scheduled/assignment/exam reminder notifications. [DONE - reminderScheduler + teacher routes]
+- Group profile picture upload UI and per-group permission editor.
+- Link previews, GIF/sticker support, location and contact sharing pickers.
+- Real push (FCM/APNs) and SMS (MTN/Airtel) providers behind the existing notifier interface.
+- Drag-and-drop uploads with percentage progress. [DONE - build verified]
+- Class resource/document area feeding the class group. [DONE - ClassResourcesPanel]

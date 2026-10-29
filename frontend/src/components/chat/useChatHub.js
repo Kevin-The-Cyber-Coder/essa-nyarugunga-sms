@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import { chatApi, isValidId } from './chatApi';
 import { joinConversationRoom, leaveConversationRoom, queryPresence, ackMessage, emitMarkRead } from './useChatSocket';
+import { alertIncoming } from './notifyClient';
 
 const THREAD_PAGE = 30;
 
@@ -153,6 +154,27 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
     }
   }, [myUserId, markRead, scrollToBottom]);
 
+  // Re-pulls the open thread without touching read state, so bulk unread/star
+// actions are not silently undone by a read-marking refresh.
+  const refreshThread = useCallback(async () => {
+    if (!activeConversation) return;
+    try {
+      const d = await chatApi.thread(String(activeConversation._id), `?limit=${THREAD_PAGE}`);
+      setMessages((d?.messages || []).map((m) => normalizeMessage(m, myUserId)));
+      setPinned((d?.pinned || []).map((m) => normalizeMessage(m, myUserId)));
+      setHasMore(!!d?.hasMore);
+    } catch {
+      /* ignore */
+    }
+  }, [activeConversation, myUserId]);
+
+  const handleBulk = useCallback(async (action, messageIds, scope) => {
+    const d = await chatApi.bulk(action, messageIds, scope);
+    await refreshThread();
+    fetchConversations();
+    return d;
+  }, [refreshThread, fetchConversations]);
+
   const loadOlder = useCallback(async () => {
     if (!activeConversation || !messages.length || !hasMore || loadingThread) return;
     const oldest = messages[0];
@@ -234,11 +256,24 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
 
     const onMessage = ({ message, conversationId }) => {
       const cid = String(conversationId);
+      const mine = String(message?.senderId) === String(myUserId);
       if (activeIdRef.current === cid) {
         upsertMessage(message);
         ackMessage(socketRef.current, String(message?._id || ''), 'read');
       } else {
         fetchConversations();
+      }
+      // Alert only for messages from other people, and only when the message is
+      // not already visible (tab hidden or a different thread is open).
+      if (!mine && message) {
+        const preview = message.type && message.type !== 'text'
+          ? `[${message.type}]`
+          : (message.content || '').slice(0, 120);
+        alertIncoming({
+          title: message.senderName ? `${message.senderName}` : 'New message',
+          body: preview || 'Sent an attachment',
+          shouldAlert: document.hidden || activeIdRef.current !== cid
+        });
       }
       onMessageSent && onMessageSent();
     };
@@ -274,14 +309,14 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
     };
   }, [socket, upsertMessage, removeMessage, fetchConversations, onMessageSent]);
 
-  const handleSend = useCallback(async ({ content, attachments, replyTo }) => {
+  const handleSend = useCallback(async ({ content, attachments, replyTo, type = 'text' }) => {
     if (!activeConversation) return;
     try {
       const optimistic = {
         _id: `pending-${Date.now()}`,
         pending: true,
         conversationId: activeConversation._id,
-        type: 'text',
+        type,
         content,
         attachments,
         senderId: myUserId,
@@ -306,7 +341,8 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
         conversationId: activeConversation._id,
         content,
         attachments,
-        replyTo
+        replyTo,
+        type
       });
       setMessages((prev) =>
         prev.map((m) => (String(m._id) === String(optimistic._id) ? normalizeMessage(d.message || d, myUserId) : m))
@@ -314,10 +350,39 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
       fetchConversations();
       onMessageSent && onMessageSent();
     } catch (err) {
-      setMessages((prev) => prev.filter((m) => !String(m._id).startsWith('pending-')));
-      Swal.fire({ title: err.message || 'Could not send.', icon: 'error', confirmButtonColor: 'var(--navy)' });
+      // Keep the bubble in place marked failed so the user can retry instead of
+      // retyping. Nothing was persisted server-side, so resend is safe.
+      setMessages((prev) =>
+        prev.map((m) => (String(m._id) === String(optimistic._id) ? { ...m, pending: false, status: 'failed' } : m))
+      );
     }
   }, [activeConversation, myUserId, myRole, replyingTo, upsertMessage, scrollToBottom, fetchConversations, onMessageSent]);
+
+  const handleResend = useCallback(async (message) => {
+    if (!activeConversation || !message) return;
+    setMessages((prev) =>
+      prev.map((m) => (String(m._id) === String(message._id) ? { ...m, pending: true, status: 'sending' } : m))
+    );
+    try {
+      const d = await chatApi.send({
+        conversationId: message.conversationId || activeConversation._id,
+        content: message.content,
+        attachments: message.attachments,
+        replyTo: message.replyTo,
+        type: message.type || 'text'
+      });
+      setMessages((prev) =>
+        prev.map((m) => (String(m._id) === String(message._id) ? normalizeMessage(d.message || d, myUserId) : m))
+      );
+      fetchConversations();
+      onMessageSent && onMessageSent();
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) => (String(m._id) === String(message._id) ? { ...m, pending: false, status: 'failed' } : m))
+      );
+      Swal.fire({ title: err.message || 'Could not send.', icon: 'error', confirmButtonColor: 'var(--navy)' });
+    }
+  }, [activeConversation, myUserId, fetchConversations, onMessageSent]);
 
   const handleEdit = useCallback(async (message, content) => {
     try {
@@ -423,10 +488,71 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
 
   const handleMute = useCallback(async (conv, minutes) => {
     try {
-      await chatApi.muteConversation(String(conv._id), minutes);
+      // The API silences "until" a timestamp; the menu works in minutes.
+      const until = minutes ? new Date(Date.now() + Number(minutes) * 60000).toISOString() : null;
+      await chatApi.muteConversation(String(conv._id), until);
       fetchConversations();
     } catch (err) {
       Swal.fire({ title: err.message || 'Could not update mute.', icon: 'error', confirmButtonColor: 'var(--navy)' });
+    }
+  }, [fetchConversations]);
+
+  const handleMarkUnread = useCallback(async (message) => {
+    try {
+      await chatApi.markUnread(String(message._id));
+      setMessages((prev) => prev.map((m) => (
+        String(m._id) === String(message._id)
+          ? { ...m, readByCount: Math.max(0, (m.readByCount || 1) - 1), isRead: false }
+          : m
+      )));
+      fetchConversations();
+    } catch (err) {
+      Swal.fire({ title: err.message || 'Could not mark unread.', icon: 'error', confirmButtonColor: 'var(--navy)' });
+    }
+  }, [fetchConversations]);
+
+  const handleClear = useCallback(async (conv) => {
+    const cid = String(conv?._id || activeConversation?._id || '');
+    if (!isValidId(cid)) return;
+    const confirm = await Swal.fire({
+      title: 'Clear this chat?',
+      text: 'The messages are removed from your view only.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Clear',
+      confirmButtonColor: 'var(--navy)'
+    });
+    if (!confirm.isConfirmed) return;
+    try {
+      await chatApi.clearChat(cid);
+      if (activeIdRef.current === cid) setMessages([]);
+      fetchConversations();
+    } catch (err) {
+      Swal.fire({ title: err.message || 'Could not clear the chat.', icon: 'error', confirmButtonColor: 'var(--navy)' });
+    }
+  }, [activeConversation, fetchConversations]);
+
+  const handleBlock = useCallback(async (user, block) => {
+    const uid = String(user?._id || user?.id || user?.userId || '');
+    if (!isValidId(uid)) return;
+    try {
+      if (block) await chatApi.block(uid);
+      else await chatApi.unblock(uid);
+      Swal.fire({
+        title: block ? 'Blocked' : 'Unblocked',
+        text: block ? 'They can no longer message you.' : 'You can message each other again.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+      if (block) {
+        setActiveConversation(null);
+        setMessages([]);
+        setPinned([]);
+      }
+      fetchConversations();
+    } catch (err) {
+      Swal.fire({ title: err.message || 'Could not update the block.', icon: 'error', confirmButtonColor: 'var(--navy)' });
     }
   }, [fetchConversations]);
 
@@ -466,6 +592,8 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
     openDirect,
     loadOlder,
     handleSend,
+    handleResend,
+    handleBulk,
     handleEdit,
     handleDelete,
     handleReact,
@@ -476,6 +604,9 @@ export const useChatHub = ({ socket, myUserId, myRole, onMessageSent, isOpen, re
     handleCopy,
     handleAction,
     handleMute,
+    handleMarkUnread,
+    handleClear,
+    handleBlock,
     closeThread,
     startConversation: (user) => openDirect(user),
     createGroupConversation: (conversation) => {

@@ -10,6 +10,8 @@ const examSchema = new mongoose.Schema({
   maxScore: { type: Number, default: 100 },
   examDate: Date,
   instructions: String,
+  // Set once the exam reminder goes out, so the scheduler does not repeat it.
+  reminderSentAt: Date,
   isPublished: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now },

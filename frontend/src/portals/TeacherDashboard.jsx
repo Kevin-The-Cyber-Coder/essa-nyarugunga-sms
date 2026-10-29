@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import io from 'socket.io-client';
@@ -11,6 +11,7 @@ import { PermissionRequestsPanel } from './PermissionRequestsPanel';
 import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
+import MessagingPanel from '../components/chat/MessagingPanel';
 
 const API_URL = import.meta.env.VITE_API_URL;
 const SOCKET_URL = API_URL;
@@ -167,7 +168,6 @@ const assignmentTypes = [
 // ═══════════════════════════════════════════════════════════════════
 const TeacherDashboard = () => {
   const navigate = useNavigate();
-  const msgEndRef = useRef(null);
 
   // layout
   const [activeTab, setActiveTab] = useState('overview');
@@ -193,6 +193,7 @@ const TeacherDashboard = () => {
   const [gradeAssignment, setGradeAssignment] = useState(null);
   const [gradeScores, setGradeScores] = useState({});
   const [gradingId, setGradingId] = useState(null);
+  const [remindingId, setRemindingId] = useState(null);
   
   // forms
   const [assignmentForm, setAssignmentForm] = useState({
@@ -211,14 +212,8 @@ const TeacherDashboard = () => {
   const [lessonFile, setLessonFile] = useState(null);
   
   // messaging
-  const [msgUsers, setMsgUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [msgText, setMsgText] = useState('');
-  const [msgTab, setMsgTab] = useState('inbox');
   const [unread, setUnread] = useState(0);
-  const [socket, setSocket] = useState(null);
-  const [msgSearch, setMsgSearch] = useState('');
 
   const userName = localStorage.getItem('userName') || 'Teacher';
   const userId = localStorage.getItem('userId');
@@ -233,10 +228,9 @@ const TeacherDashboard = () => {
   useEffect(() => {
     const token = getToken(); if (!token) return;
     const sock = io(SOCKET_URL, { auth: { token } });
-    setSocket(sock);
     if (userId) sock.emit('join', userId);
-    sock.on('new_message', () => { fetchUnread(); fetchMsgUsers(); });
-    sock.on('newMessage', () => { fetchUnread(); fetchMsgUsers(); });
+    sock.on('new_message', () => { fetchUnread(); });
+    sock.on('newMessage', () => { fetchUnread(); });
     return () => sock.disconnect();
   }, [userId]);
 
@@ -251,8 +245,6 @@ const TeacherDashboard = () => {
     loadAll();
   }, [navigate]);
 
-  useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-
   // ─── API ──────────────────────────────────────────────────────────
   const api = useCallback(async (path, opts = {}) => {
     const res = await fetch(`${API_URL}/api${path}`, { headers: authHeaders(), ...opts });
@@ -262,36 +254,24 @@ const TeacherDashboard = () => {
 
   const loadAll = () => Promise.all([
     fetchClasses(), fetchStudents(), fetchAssignments(), fetchAnnouncements(),
-    fetchLessonPlans(), fetchMsgUsers(), fetchUnread()
+    fetchLessonPlans(), fetchUnread()
   ]).finally(() => setLoading(false));
 
   const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => setClasses([]));
   const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => setStudents([]));
   const fetchAssignments = () => api('/teacher/assignments').then(d => setAssignments(Array.isArray(d) ? d : [])).catch(() => setAssignments([]));
-  const fetchAnnouncements = () => api('/announcements').then(d => setAnnouncements(Array.isArray(d) ? d : [])).catch(() => setAnnouncements([]));
+  const fetchAnnouncements = () => api('/announcements')
+    .then(d => {
+      const list = Array.isArray(d) ? d : [];
+      setAnnouncements(list);
+      list.forEach(ann => {
+        if (ann?._id) api(`/announcements/${ann._id}/read`, { method: 'PUT' }).catch(() => {});
+      });
+    })
+    .catch(() => setAnnouncements([]));
   const fetchLessonPlans = () => api('/teacher/lesson-plans').then(d => setLessonPlans(Array.isArray(d) ? d : [])).catch(() => setLessonPlans([]));
   
-  const fetchMsgUsers = () => api('/messages/users').then(d => {
-    const all = Object.values(d.users || d || {});
-    setMsgUsers(Array.isArray(all) ? all.flat() : []);
-  }).catch(() => setMsgUsers([]));
-  
   const fetchUnread = () => api('/messages/unread-count').then(d => setUnread(d.count || 0)).catch(() => {});
-  const fetchConversation = (uid) => api(`/messages/conversation/${uid}`).then(d => setMessages(Array.isArray(d.messages) ? d.messages : [])).catch(() => setMessages([]));
-  
-  const sendMessage = async () => {
-    if (!msgText.trim() || !selectedUser) return;
-    try {
-      const res = await api('/messages/send', {
-        method: 'POST',
-        body: JSON.stringify({ recipientId: selectedUser._id, subject: 'Direct Message', content: msgText.trim() })
-      });
-      setMessages(prev => [...prev, res.message]);
-      setMsgText('');
-      if (socket) socket.emit('sendMessage', { receiverId: selectedUser._id, ...res.message });
-      fetchUnread();
-    } catch (e) { console.error('Send error:', e); }
-  };
   
   // Create Assignment with File Upload
   const createAssignment = async () => {
@@ -330,6 +310,34 @@ const TeacherDashboard = () => {
       Swal.fire('Error', e.message || 'Failed to create assignment', 'error'); 
     }
     finally { setSaving(false); }
+  };
+
+  const remindAssignment = async (a) => {
+    setRemindingId(a._id);
+    try {
+      const d = await api(`/teacher/assignments/${a._id}/remind`, { method: 'POST' });
+      Swal.fire('Reminder sent', `Reached ${d.students || 0} student(s) and ${d.parents || 0} guardian(s).`, 'success');
+    } catch (e) {
+      Swal.fire('Error', e.message || 'Failed to send reminder', 'error');
+    } finally { setRemindingId(null); }
+  };
+
+  const sendFeedback = async (student) => {
+    const { value: messageText } = await Swal.fire({
+      title: `Feedback for ${student.fullName}`,
+      input: 'textarea',
+      inputPlaceholder: 'Write your academic feedback…',
+      showCancelButton: true,
+      confirmButtonText: 'Send',
+      confirmButtonColor: 'var(--navy)'
+    });
+    if (!messageText || !messageText.trim()) return;
+    try {
+      const d = await api('/teacher/feedback', { method: 'POST', body: JSON.stringify({ studentId: student._id, message: messageText }) });
+      Swal.fire('Sent', `Delivered to ${d.reached || 1} recipient(s).`, 'success');
+    } catch (e) {
+      Swal.fire('Error', e.message || 'Failed to send feedback', 'error');
+    }
   };
 
   const openGrading = (assignment) => {
@@ -458,11 +466,6 @@ const TeacherDashboard = () => {
     }
     finally { setSaving(false); }
   };
-  
-  const filteredUsers = msgUsers.filter(u =>
-    u.fullName?.toLowerCase().includes(msgSearch.toLowerCase()) ||
-    u.role?.toLowerCase().includes(msgSearch.toLowerCase())
-  );
   
   const pendingAssignments = assignments.filter(a => new Date(a.dueDate) > new Date()).length;
   const totalStudents = students.length;
@@ -727,6 +730,7 @@ const TeacherDashboard = () => {
                         </div>
                         <Btn small icon="fas fa-eye" color="#3498db" onClick={() => Swal.fire({ title: a.title, html: `<p>${a.description || 'No description'}</p>${a.fileUrl ? `<a href="${a.fileUrl}" target="_blank">Download Attachment</a>` : ''}`, width: 500 })}>View</Btn>
                         <Btn small icon="fas fa-check-double" color="#27ae60" onClick={() => openGrading(a)}>Submissions ({(a.submissions || []).length})</Btn>
+                        <Btn small icon={remindingId === a._id ? 'fas fa-spinner fa-spin' : 'fas fa-bell'} color="#f39c12" onClick={() => remindAssignment(a)}>{remindingId === a._id ? 'Sending…' : 'Remind'}</Btn>
                       </div>
                       {a.description && <p style={{ margin: '8px 0 0', fontSize: 12, color:'var(--text-secondary)' }}>{a.description.substring(0, 100)}...</p>}
                     </div>
@@ -747,7 +751,8 @@ const TeacherDashboard = () => {
                       <TD>{s.classId ? <Badge text={`${s.classId.grade || ''} ${s.classId.className || ''}`} color="#3498db" bg="#e3f2fd" /> : '—'}</TD>
                       <TD style={{ fontSize: 12 }}>{s.parentName || '—'}</TD>
                       <TD style={{ fontSize: 12 }}>{s.parentPhone || '—'}</TD>
-                      <TD><Btn small icon="fas fa-comment" color="#3498db" onClick={() => { setSelectedUser(s); setActiveTab('messages'); }}>Message</Btn></TD></>
+                      <TD><Btn small icon="fas fa-comment" color="#3498db" onClick={() => { setSelectedUser(s); setActiveTab('messages'); }}>Message</Btn>
+                        <Btn small icon="fas fa-comment-dots" color="#0e7490" onClick={() => sendFeedback(s)}>Feedback</Btn></TD></>
                   ))}
                 />
               </div>
@@ -843,86 +848,7 @@ const TeacherDashboard = () => {
 
           {/* ══ MESSAGES ══ */}
           {activeTab === 'messages' && (
-            <div style={{ background:'var(--surface-card)', borderRadius: 14, overflow: 'hidden', height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-              <div style={{ padding: '12px 18px', borderBottom:'1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {['inbox', 'compose'].map(t => (
-                  <button key={t} onClick={() => { setMsgTab(t); if (t === 'compose') { setSelectedUser(null); setMessages([]); } }}
-                    style={{ padding: '7px 18px', borderRadius: 30, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: msgTab === t ? '#1a3a5c' : '#f0f3f8', color: msgTab === t ? 'var(--on-solid)' : '#666', transition: 'all .2s' }}>
-                    {t === 'inbox' ? <><i className="fas fa-inbox" style={{ marginRight: 6 }} />Inbox{unread > 0 && <span style={{ marginLeft: 6, background: '#e74c3c', color:'var(--on-solid)', borderRadius: 20, fontSize: 10, padding: '1px 6px' }}>{unread}</span>}</> : <><i className="fas fa-pen" style={{ marginRight: 6 }} />New Message</>}
-                  </button>
-                ))}
-              </div>
-              {msgTab === 'inbox' ? (
-                <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                  <div style={{ width: 260, borderRight:'1px solid var(--border)', display: 'flex', flexDirection: 'column', background:'var(--surface-raised)', flexShrink: 0 }}>
-                    <div style={{ padding: '10px 12px', borderBottom:'1px solid var(--border)' }}>
-                      <div style={{ position: 'relative' }}>
-                        <i className="fas fa-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color:'var(--border-strong)', fontSize: 11 }} />
-                        <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search…" style={{ width: '100%', padding: '7px 10px 7px 28px', border:'1px solid var(--border)', borderRadius: 20, fontSize: 12, boxSizing: 'border-box', outline: 'none' }} />
-                      </div>
-                    </div>
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                      {filteredUsers.length === 0 && <div style={{ textAlign: 'center', padding: 28, color:'var(--border-strong)', fontSize: 13 }}>No users found</div>}
-                      {filteredUsers.map(u => (
-                        <div key={u._id} onClick={() => { setSelectedUser(u); fetchConversation(u._id); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', cursor: 'pointer', background: selectedUser?._id === u._id ? '#e8f0fe' : 'transparent', borderLeft: selectedUser?._id === u._id ? '3px solid #ffc107' : '3px solid transparent', transition: 'background .15s' }}>
-                          <Avatar name={u.fullName} size={34} img={u.profileImage} />
-                          <div style={{ overflow: 'hidden' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color:'var(--text-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.fullName}</div>
-                            <div style={{ fontSize: 10, color: '#ffc107', fontWeight: 700 }}>{roleBadge(u.role).label}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {selectedUser ? (
-                      <>
-                        <div style={{ padding: '12px 16px', borderBottom:'1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 11 }}>
-                          <Avatar name={selectedUser.fullName} size={38} img={selectedUser.profileImage} />
-                          <div><div style={{ fontWeight: 600, fontSize: 14, color:'var(--navy)' }}>{selectedUser.fullName}</div><div style={{ fontSize: 11, color: '#ffc107', fontWeight: 700 }}>{roleBadge(selectedUser.role).label}</div></div>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background:'var(--surface-raised)' }}>
-                          {messages.length === 0 && <div style={{ textAlign: 'center', color:'var(--border-strong)', paddingTop: 40 }}><i className="fas fa-comments" style={{ fontSize: 30, display: 'block', marginBottom: 8 }} />Start a conversation</div>}
-                          {messages.map(m => (
-                            <div key={m._id} className={m.senderId === userId ? 'sent-bubble' : 'recv-bubble'}>
-                              <div>{m.content}</div>
-                              <div style={{ fontSize: 10, opacity: .6, marginTop: 4, textAlign: 'right' }}>{fmtTime(m.createdAt)}</div>
-                            </div>
-                          ))}
-                          <div ref={msgEndRef} />
-                        </div>
-                        <div style={{ padding: '10px 14px', borderTop:'1px solid var(--border)', display: 'flex', gap: 9, background:'var(--surface-card)', alignItems: 'flex-end' }}>
-                          <textarea value={msgText} onChange={e => setMsgText(e.target.value)} placeholder={`Message ${selectedUser.fullName}…`} rows={2}
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                            style={{ flex: 1, padding: '9px 12px', border:'1.5px solid var(--surface-sunken-2)', borderRadius: 12, resize: 'none', fontFamily: 'inherit', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-                          <button onClick={sendMessage} disabled={!msgText.trim()} style={{ width: 40, height: 40, background: msgText.trim() ? '#1a3a5c' : '#ddd', border: 'none', borderRadius: '50%', cursor: msgText.trim() ? 'pointer' : 'default', color:'var(--on-solid)', fontSize: 15, flexShrink: 0, transition: 'all 0.2s' }}
-                            onMouseEnter={e => { if (msgText.trim()) e.currentTarget.style.background = '#ffc107'; }}
-                            onMouseLeave={e => { if (msgText.trim()) e.currentTarget.style.background = '#1a3a5c'; }}>
-                            <i className="fas fa-paper-plane" />
-                          </button>
-                        </div>
-                      </>
-                    ) : <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color:'var(--border-strong)', gap: 10 }}><i className="fas fa-comments" style={{ fontSize: 44, opacity: .3 }} /><div style={{ fontSize: 14 }}>Select a user to message</div></div>}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ flex: 1, padding: 24, maxWidth: 580, margin: '0 auto', width: '100%', overflowY: 'auto' }}>
-                  <h3 style={{ margin: '0 0 18px', color:'var(--navy)', fontFamily: 'Georgia, serif' }}>New Message</h3>
-                  <Field label="Recipient" required>
-                    <Sel value={selectedUser?._id || ''} onChange={e => setSelectedUser(msgUsers.find(u => u._id === e.target.value) || null)}>
-                      <option value="">Select user…</option>
-                      {msgUsers.map(u => <option key={u._id} value={u._id}>{u.fullName} — {roleBadge(u.role).label}</option>)}
-                    </Sel>
-                  </Field>
-                  <Field label="Message" required>
-                    <Txt value={msgText} onChange={e => setMsgText(e.target.value)} rows={7} placeholder="Type your message…" />
-                  </Field>
-                  <Btn icon="fas fa-paper-plane" color="#1a3a5c" style={{ width: '100%', justifyContent: 'center', padding: 11, marginTop: 4 }}
-                    onClick={async () => { if (!selectedUser || !msgText.trim()) { Swal.fire('Error', 'Select recipient and enter message', 'warning'); return; } await sendMessage(); Swal.fire('✅ Sent!', '', 'success'); setMsgTab('inbox'); }}>Send Message</Btn>
-                </div>
-              )}
-            </div>
+            <MessagingPanel recipient={selectedUser || undefined} onMessageSent={fetchUnread} height="calc(100vh - 150px)" />
           )}
 
           {/* ══ PROFILE ══ */}

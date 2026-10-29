@@ -6,7 +6,7 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
 const SubjectAllocation = require('../models/SubjectAllocation');
-const { allowedClassIds, isStaff, messagingDirectory } = require('./access');
+const { allowedClassIds, isStaff, messagingDirectory, blockedUserIds } = require('./access');
 
 // Shared conversation logic. Both route files need membership rules and the
 // "does this pair already have a thread" lookup, and a group's roster has to be
@@ -63,8 +63,19 @@ const asParticipant = (user) => ({
 // cannot reach someone by posting an id the UI never showed them.
 const canContact = async (userId, userRole, targetId) => {
   if (toId(userId) === toId(targetId)) return false;
+
+  // The directory filter carries an `_id` clause that scopes the *listing*
+  // (excluding self and blocked accounts). Spreading it verbatim would
+  // overwrite the target id and reduce the check to "does any contact exist",
+  // so the directory-wide id clause is dropped and the target is asserted
+  // explicitly, with the block list applied on its own.
   const { filter } = await messagingDirectory(userId, userRole);
-  return !!(await User.exists({ _id: targetId, ...filter }));
+  const { _id: _ignored, ...scope } = filter;
+
+  const blocked = await blockedUserIds(userId);
+  if (blocked.includes(toId(targetId))) return false;
+
+  return !!(await User.exists({ ...scope, _id: targetId }));
 };
 
 // Finds or creates the one-to-one thread between two people. Creation races are

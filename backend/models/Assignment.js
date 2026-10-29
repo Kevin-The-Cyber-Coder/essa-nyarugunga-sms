@@ -9,6 +9,9 @@ const assignmentSchema = new mongoose.Schema({
   dueDate: Date,
   totalPoints: Number,
   fileUrl: String,
+  // When the "due soon" reminder went out. The reminder scheduler stamps this
+  // so a notice is never sent twice for the same assignment.
+  reminderSentAt: Date,
   submissions: [{
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
     submittedAt: Date,

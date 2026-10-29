@@ -98,7 +98,13 @@ const StudentDashboard = () => {
       setGrades(Array.isArray(gradesData) ? gradesData : []);
       setAttendance(Array.isArray(attendanceData) ? attendanceData : []);
       setFeeStatus(feeData);
-      setAnnouncements(Array.isArray(announcementsData) ? announcementsData : []);
+      const annList = Array.isArray(announcementsData) ? announcementsData : [];
+      setAnnouncements(annList);
+      // Acknowledge the notices on screen. Fire-and-forget: a failed receipt
+      // must never block the dashboard from rendering.
+      annList.forEach((ann) => {
+        if (ann?._id) apiRequest(`/announcements/${ann._id}/read`, { method: 'PUT' }).catch(() => {});
+      });
       setTimetable(Array.isArray(timetableData?.timetable) ? timetableData.timetable : []);
       setTimetableDays(Array.isArray(timetableData?.days) ? timetableData.days : []);
     } catch (error) {

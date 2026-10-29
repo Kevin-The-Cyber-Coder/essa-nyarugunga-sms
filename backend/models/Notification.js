@@ -11,6 +11,8 @@ const NOTIFICATION_TYPES = [
   'announcement',
   'assignment',
   'exam',
+  'homework',
+  'academic_feedback',
   'fee',
   'attendance',
   'system'

@@ -20,10 +20,21 @@ const announcementSchema = new mongoose.Schema({
   userIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   priority: { type: String, default: 'normal' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // When set to a future time the notice is held back: it exists, staff can
+  // see and edit it, but it is invisible to its audience and no notification
+  // goes out until the scheduler stamps `publishedAt`.
+  scheduledAt: { type: Date, default: null },
+  // Null means "not yet published". Stamped either at creation (immediate
+  // post) or by the scheduler when a scheduled time arrives.
+  publishedAt: { type: Date, default: null },
+  // Who has acknowledged reading it. A list rather than a count so a "read by"
+  // drill-down can name people; the list endpoint only ever exposes the count.
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now }
 });
 announcementSchema.index({ classIds: 1, createdAt: -1 });
 announcementSchema.index({ userIds: 1 });
 announcementSchema.index({ grades: 1 });
+announcementSchema.index({ isActive: 1, publishedAt: 1, scheduledAt: 1 });
 module.exports = mongoose.model('Announcement', announcementSchema);

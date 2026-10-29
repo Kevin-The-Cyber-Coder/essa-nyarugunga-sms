@@ -3,6 +3,25 @@ const Student = require('../models/Student');
 const Class = require('../models/Class');
 const SubjectAllocation = require('../models/SubjectAllocation');
 const ParentProfile = require('../models/ParentProfile');
+const Block = require('../models/Block');
+
+const toId = (v) => String(v);
+
+// Everyone a caller has a block against, in either direction. A block is
+// mutual for contact purposes: whoever placed it, neither party should appear
+// in the other's picker or be reachable by starting a thread.
+const blockedUserIds = async (userId) => {
+  const rows = await Block.find({ $or: [{ blockerId: userId }, { blockedId: userId }] })
+    .select('blockerId blockedId')
+    .lean();
+  const ids = new Set();
+  for (const row of rows) {
+    ids.add(toId(row.blockerId));
+    ids.add(toId(row.blockedId));
+  }
+  ids.delete(toId(userId));
+  return [...ids];
+};
 
 // A single student's results are personal data, so read access has to follow
 // the relationship rather than mere authentication. Otherwise any logged-in
@@ -136,7 +155,8 @@ const classScopeFilter = async (userId, userRole) => {
 // which is not something either role needs in order to message their own
 // teacher. Staff still see everyone, because oversight is their job.
 const messagingDirectory = async (userId, userRole) => {
-  const base = { isActive: true, _id: { $ne: userId } };
+  const blocked = await blockedUserIds(userId);
+  const base = { isActive: true, _id: { $ne: userId, $nin: blocked } };
 
   if (isStaff(userRole)) {
     return { includeEmail: true, filter: base };
@@ -151,8 +171,15 @@ const messagingDirectory = async (userId, userRole) => {
     // classId lives on Student, not on User. Filtering the users collection by
     // it (as this did before) matched nothing, so a teacher's message directory
     // listed no pupils at all even for classes they teach.
-    const classmates = ids.length
-      ? await Student.find({ classId: { $in: ids } }).distinct('userId')
+    const students = ids.length
+      ? await Student.find({ classId: { $in: ids } }).select('_id userId').lean()
+      : [];
+    const classmates = students.map(s => s.userId).filter(Boolean);
+    // Teachers also need to reach the guardians of the pupils they teach, so
+    // the directory includes the parent accounts linked to those students.
+    const studentIds = students.map(s => s._id);
+    const parentIds = studentIds.length
+      ? await ParentProfile.find({ children: { $in: studentIds } }).distinct('userId')
       : [];
     return {
       includeEmail: false,
@@ -161,7 +188,8 @@ const messagingDirectory = async (userId, userRole) => {
         $or: [
           leadership,
           { role: 'teacher' },
-          { _id: { $in: classmates } }
+          { _id: { $in: classmates } },
+          { role: 'parent', _id: { $in: parentIds } }
         ]
       }
     };
@@ -173,6 +201,10 @@ const messagingDirectory = async (userId, userRole) => {
     const coParents = children.length
       ? await ParentProfile.find({ children: { $in: children } }).distinct('userId')
       : [];
+    // A guardian may message their own children directly as well.
+    const childUserIds = children.length
+      ? await Student.find({ _id: { $in: children } }).distinct('userId')
+      : [];
     return {
       includeEmail: false,
       filter: {
@@ -183,7 +215,8 @@ const messagingDirectory = async (userId, userRole) => {
           // parent must be able to ask any of them about their child even when
           // no class teacher has been assigned yet.
           { role: 'teacher' },
-          { _id: { $in: coParents } }
+          { _id: { $in: coParents } },
+          { role: 'student', _id: { $in: childUserIds } }
         ]
       }
     };
@@ -195,6 +228,10 @@ const messagingDirectory = async (userId, userRole) => {
     const classmates = classIds.length
       ? await Student.find({ classId: { $in: classIds } }).distinct('userId')
       : [];
+    // Students may also message their own parent/guardian accounts.
+    const parentIds = own
+      ? await ParentProfile.find({ children: own._id }).distinct('userId')
+      : [];
     return {
       includeEmail: false,
       filter: {
@@ -202,7 +239,8 @@ const messagingDirectory = async (userId, userRole) => {
         $or: [
           leadership,
           { role: 'teacher' },
-          { _id: { $in: classmates } }
+          { _id: { $in: classmates } },
+          { role: 'parent', _id: { $in: parentIds } }
         ]
       }
     };
@@ -219,6 +257,7 @@ module.exports = {
   classScopeFilter,
   allowedClassIds,
   messagingDirectory,
+  blockedUserIds,
   STAFF_ROLES,
   isStaff
 };

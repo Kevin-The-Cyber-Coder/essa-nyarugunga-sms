@@ -255,7 +255,8 @@ const SuperAdminDashboard = () => {
   const [annoModal, setAnnoModal]       = useState(false);
   const [profileModal, setProfileModal] = useState(false);
   const [adminForm, setAdminForm]       = useState({ fullName:'', email:'', password:'', phone:'', role:'academic_admin' });
-  const [annoForm, setAnnoForm]         = useState({ title:'', content:'', audience:'all', priority:'normal' });
+  const [annoForm, setAnnoForm]         = useState({ title:'', content:'', audience:'all', priority:'normal', scheduledAt:'' });
+  const [annoSearch, setAnnoSearch]     = useState('');
   const [profileForm, setProfileForm]   = useState({ fullName:'', phone:'' });
   const [pwForm, setPwForm]             = useState({ currentPassword:'', newPassword:'', confirmPassword:'' });
   const [saving, setSaving]             = useState(false);
@@ -505,9 +506,13 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     setSaving(true);
     try {
       await api('/super-admin/announcements', { method: 'POST', body: JSON.stringify(annoForm) });
-      Swal.fire('📢 Posted!', 'Announcement sent to all users', 'success');
+      Swal.fire(
+        annoForm.scheduledAt ? '🗓️ Scheduled!' : '📢 Posted!',
+        annoForm.scheduledAt ? `It will go out on ${new Date(annoForm.scheduledAt).toLocaleString()}.` : 'Announcement sent to all users',
+        'success'
+      );
       setAnnoModal(false);
-      setAnnoForm({ title:'', content:'', audience:'all', priority:'normal' });
+      setAnnoForm({ title:'', content:'', audience:'all', priority:'normal', scheduledAt:'' });
       fetchAnnouncements();
     } catch (e) {
       Swal.fire('Error', e.message || 'Failed to post announcement', 'error');
@@ -993,18 +998,30 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
                     {announcements.length} total announcements
                   </p>
                 </div>
-                <Btn onClick={() => setAnnoModal(true)} icon="fas fa-bullhorn" color="#1a3a5c">Post Announcement</Btn>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Input value={annoSearch} placeholder="Search announcements…"
+                    onChange={e => setAnnoSearch(e.target.value)} style={{ width: 240 }} />
+                  <Btn onClick={() => setAnnoModal(true)} icon="fas fa-bullhorn" color="#1a3a5c">Post Announcement</Btn>
+                </div>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {announcements.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: 60, color:'var(--text-faint-2)', background:'var(--surface-card)', borderRadius: 16 }}>
-                    <i className="fas fa-bullhorn" style={{ fontSize: 36, marginBottom: 12, display: 'block', opacity: .3 }} />
-                    No announcements yet
-                  </div>
-                )}
-
-                {announcements.map((ann) => {
+                {(() => {
+                  const q = annoSearch.trim().toLowerCase();
+                  const shown = q
+                    ? announcements.filter(a =>
+                        String(a.title || '').toLowerCase().includes(q) ||
+                        String(a.content || '').toLowerCase().includes(q))
+                    : announcements;
+                  if (!shown.length) {
+                    return (
+                      <div style={{ textAlign: 'center', padding: 60, color:'var(--text-faint-2)', background:'var(--surface-card)', borderRadius: 16 }}>
+                        <i className="fas fa-bullhorn" style={{ fontSize: 36, marginBottom: 12, display: 'block', opacity: .3 }} />
+                        {q ? 'No announcements match your search' : 'No announcements yet'}
+                      </div>
+                    );
+                  }
+                  return shown.map((ann) => {
                   const priority = ann.priority || 'normal';
                   const pColor = priority === 'urgent' ? '#e74c3c' : priority === 'high' ? '#f39c12' : '#27ae60';
                   const pBg = priority === 'urgent' ? '#fdecea' : priority === 'high' ? '#fff3e0' : '#e8f5e9';
@@ -1020,6 +1037,12 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
                             <Badge text={priority} color={pColor} bg={pBg} />
                             <Badge text={ann.audience === 'all' ? 'All Users' : (ann.audience || 'All Users')} color="#888" bg="#f5f5f5" />
+                            {!ann.publishedAt && ann.scheduledAt && (
+                              <Badge text={`Scheduled ${new Date(ann.scheduledAt).toLocaleString()}`} color="#6c5ce7" bg="#efecff" />
+                            )}
+                            {!!ann.publishedAt && (
+                              <Badge text={`👁 ${ann.readCount || 0} read`} color="#0a7" bg="#e6f7f0" />
+                            )}
                           </div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1030,7 +1053,8 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
                       <p style={{ margin: 0, fontSize: 13, color:'var(--text-2)', lineHeight: 1.7 }}>{ann.content || 'No content provided'}</p>
                     </div>
                   );
-                })}
+                  });
+                })()}
               </div>
             </div>
           )}
@@ -1399,6 +1423,10 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
             </Select>
           </Field>
         </div>
+        <Field label="Schedule (optional)">
+          <Input type="datetime-local" value={annoForm.scheduledAt}
+            onChange={e => setAnnoForm(p => ({ ...p, scheduledAt: e.target.value }))} />
+        </Field>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
           <Btn onClick={() => setAnnoModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
           <Btn onClick={postAnnouncement} icon="fas fa-bullhorn" color="#1a3a5c" style={{ minWidth: 150, justifyContent: 'center' }}>

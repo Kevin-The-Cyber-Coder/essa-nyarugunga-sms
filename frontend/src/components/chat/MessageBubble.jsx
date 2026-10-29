@@ -8,7 +8,9 @@ const AttachmentBlock = ({ attachments }) => {
   return (
     <div className="ck-attachments">
       {attachments.map((file) =>
-        file.kind === 'image' || (file.mime || '').startsWith('image/') ? (
+        file.kind === 'audio' || (file.mime || '').startsWith('audio/') ? (
+          <audio key={file.url || file.name} src={file.url} controls style={{ maxWidth: 240 }} />
+        ) : file.kind === 'image' || (file.mime || '').startsWith('image/') ? (
           <a
             key={file.url || file.name}
             href={file.url}
@@ -38,11 +40,15 @@ const MessageBubble = ({
   onEdit,
   onDelete,
   onReact,
-  onPin,
+onPin,
   onStar,
-  onForward,
+  onResend,
   onReport,
-  onCopy
+  onCopy,
+  onMarkUnread,
+  selectable,
+  selected,
+  onSelect
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -88,7 +94,15 @@ const MessageBubble = ({
   const act = (fn) => (e) => { e.stopPropagation(); closeAll(); fn && fn(); };
 
   return (
-    <div className={`ck-bubble-row ${mine ? 'mine' : ''}`}>
+    <div
+      className={`ck-bubble-row ${mine ? 'mine' : ''} ${selectable ? 'selectable' : ''} ${selected ? 'selected' : ''}`}
+      onClick={selectable ? () => onSelect && onSelect(message) : undefined}
+    >
+      {selectable && (
+        <span className={`ck-select-box ${selected ? 'on' : ''}`}>
+          {selected && <i className="fas fa-check" />}
+        </span>
+      )}
       <div className="ck-bubble-wrap">
         {showSender && (
           <div className="ck-bubble-meta">
@@ -97,7 +111,7 @@ const MessageBubble = ({
           </div>
         )}
 
-        <div className="ck-bubble" onDoubleClick={() => onCopy && onCopy(message)}>
+        <div className="ck-bubble" onDoubleClick={() => !selectable && onCopy && onCopy(message)}>
           {message.replyPreview && (
             <div className="ck-reply-preview">
               <div style={{ fontWeight: 600 }}>↩ {message.replyPreview.senderName || 'Reply'}</div>
@@ -132,15 +146,24 @@ const MessageBubble = ({
             {message.isEdited && <span>(edited)</span>}
             {message.forwardedFrom && <span><i className="fas fa-forward" style={{ marginRight: 4 }} />forwarded</span>}
             {message.pinned && <span title="Pinned"><i className="fas fa-thumbtack" /></span>}
-            {mine && message.status && (
+            {mine && message.status === 'failed' ? (
+              <button
+                className="ck-resend"
+                title="Failed - click to resend"
+                onClick={() => onResend && onResend(message)}
+              >
+                <i className="fas fa-triangle-exclamation" /> Resend
+              </button>
+            ) : mine && message.status && (
               <span title={`${message.status}${message.readByCount > 1 ? ` · ${message.readByCount} seen` : ''}`} style={{ opacity: message.status === 'read' ? 1 : 0.85 }}>
-                {message.status === 'read' ? <i className="fas fa-check-double" /> : message.status === 'delivered' || message.starred ? <i className="fas fa-check-double" /> : <i className="fas fa-check" />}
+                {message.status === 'read' ? <i className="fas fa-check-double" /> : message.status === 'delivered' || message.starred ? <i className="fas fa-check-double" /> : message.status === 'sending' ? <i className="fas fa-clock" /> : <i className="fas fa-check" />}
               </span>
             )}
             {mine && message.starred && <i className="fas fa-star" style={{ color: 'var(--warning, #b45309)' }} />}
           </div>
         </div>
 
+        {!selectable && (
         <div className="ck-actionbar">
           <button className="ck-quick" title="React" onClick={handleEmoji}><i className="fas fa-smile" /></button>
           {onReply && <button className="ck-quick" title="Reply" onClick={act(() => onReply(message))}><i className="fas fa-reply" /></button>}
@@ -188,6 +211,11 @@ const MessageBubble = ({
                   <i className="fas fa-star" /> {message.starred ? 'Unstar' : 'Star'}
                 </button>
               )}
+              {!mine && onMarkUnread && (
+                <button className="ck-menu-item" onClick={act(() => onMarkUnread(message))}>
+                  <i className="fas fa-envelope" /> Mark unread
+                </button>
+              )}
               {onReport && (
                 <button
                   className="ck-menu-item"
@@ -216,6 +244,7 @@ const MessageBubble = ({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

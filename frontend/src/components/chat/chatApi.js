@@ -45,26 +45,52 @@ export const chatApi = {
   star: (messageId) => http(`/messages/${messageId}/star`, { method: 'POST' }),
   forward: (messageId, conversationIds) => http(`/messages/${messageId}/forward`, { method: 'POST', ...auth(), body: JSON.stringify({ conversationIds }) }),
   report: (messageId, reason) => http(`/messages/${messageId}/report`, { method: 'POST', ...auth(), body: JSON.stringify({ reason }) }),
-  archive: (conversationId, archived) => http(`/messages/conversations/${conversationId}/archive`, { method: 'PUT', ...auth(), body: JSON.stringify({ archived }) }),
-  pinConversation: (conversationId, pinned) => http(`/messages/conversations/${conversationId}/pin`, { method: 'PUT', ...auth(), body: JSON.stringify({ pinned }) }),
-  muteConversation: (conversationId, minutes) => http(`/messages/conversations/${conversationId}/mute`, { method: 'PUT', ...auth(), body: JSON.stringify({ minutes }) }),
+  markUnread: (messageId) => http(`/messages/${messageId}/unread`, { method: 'PUT' }),
+  bulk: (action, messageIds, scope) => http('/messages/bulk', { method: 'POST', ...auth(), body: JSON.stringify({ action, messageIds, scope }) }),
+  clearChat: (conversationId) => http(`/messages/conversations/${conversationId}/messages`, { method: 'DELETE' }),
+  archive: (conversationId, value) => http(`/messages/conversations/${conversationId}/archive`, { method: 'PUT', ...auth(), body: JSON.stringify({ value }) }),
+  pinConversation: (conversationId, value) => http(`/messages/conversations/${conversationId}/pin`, { method: 'PUT', ...auth(), body: JSON.stringify({ value }) }),
+  muteConversation: (conversationId, until) => http(`/messages/conversations/${conversationId}/mute`, { method: 'PUT', ...auth(), body: JSON.stringify({ until }) }),
+  blocks: () => http('/messages/blocks'),
+  block: (userId) => http('/messages/blocks', { method: 'POST', ...auth(), body: JSON.stringify({ userId }) }),
+  unblock: (userId) => http(`/messages/blocks/${userId}`, { method: 'DELETE', ...auth() }),
   directory: () => http('/messages/users'),
   search: (params = '') => http(`/messages/search${params}`),
   starred: () => http('/messages/starred'),
   uploadConfig: () => http('/files/config'),
 
-  upload: async (files) => {
+  // Class resources (a document shelf, distinct from chat attachments).
+  classResources: (classId) => http(`/classes/${classId}/resources`),
+  addClassResource: (classId, payload) => http(`/classes/${classId}/resources`, { method: 'POST', ...auth(), body: JSON.stringify(payload) }),
+  deleteClassResource: (classId, resourceId) => http(`/classes/${classId}/resources/${resourceId}`, { method: 'DELETE', ...auth() }),
+
+  // Uses XHR rather than fetch because fetch cannot report upload progress.
+  // `onProgress` receives a 0-100 integer.
+  upload: (files, onProgress) => new Promise((resolve, reject) => {
     const fd = new FormData();
     for (const f of files) fd.append('files', f);
-    const res = await fetch(`${API_URL}/api/files/upload`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: fd
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.message || 'Upload failed');
-    return data;
-  }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/api/files/upload`);
+    xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+
+    if (typeof onProgress === 'function') {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+    }
+
+    xhr.onload = () => {
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch { /* non-JSON error body */ }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data || {});
+      reject(new Error(data?.message || `Upload failed (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('Upload failed. Check your connection.'));
+    xhr.onabort = () => reject(new Error('Upload cancelled.'));
+
+    xhr.send(fd);
+  })
 };
 
 export const isValidId = (value) =>

@@ -10,6 +10,8 @@ const TYPE_STYLE = {
   reply:          { icon: 'fa-reply',           color: '#0e7490', label: 'Reply' },
   announcement:   { icon: 'fa-bullhorn',        color: '#16653f', label: 'Announcement' },
   assignment:     { icon: 'fa-book-open',       color: '#b45309', label: 'Assignment' },
+  homework:       { icon: 'fa-pen-to-square',   color: '#b45309', label: 'Homework' },
+  academic_feedback: { icon: 'fa-comment-dots', color: '#0e7490', label: 'Feedback' },
   exam:           { icon: 'fa-file-lines',      color: '#b91c1c', label: 'Exam' },
   fee:            { icon: 'fa-coins',           color: '#15803d', label: 'Fee' },
   attendance:     { icon: 'fa-clipboard-check', color: '#4b5563', label: 'Attendance' },

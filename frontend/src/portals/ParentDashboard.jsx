@@ -234,7 +234,11 @@ const ParentDashboard = () => {
       setAttendance(Array.isArray(val(a, [])) ? val(a, []) : []);
       setFeeStatus(val(f, null));
       setAssignments(Array.isArray(val(hw, [])) ? val(hw, []) : []);
-      setAnnouncements(Array.isArray(val(an, [])) ? val(an, []) : []);
+      const annList = Array.isArray(val(an, [])) ? val(an, []) : [];
+      setAnnouncements(annList);
+      annList.forEach((a) => {
+        if (a && a._id) api(`/announcements/${a._id}/read`, { method: 'PUT' }).catch(() => {});
+      });
       setEvents(Array.isArray(val(ev, [])) ? val(ev, []) : []);
       setDisciplineRecords(Array.isArray(val(dc, [])) ? val(dc, []) : []);
       setDocuments(Array.isArray(val(docs, [])) ? val(docs, []) : []);

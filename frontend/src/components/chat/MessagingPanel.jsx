@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import { useChatSocket, isTypingIn } from './useChatSocket';
 import { useChatHub } from './useChatHub';
@@ -8,6 +8,9 @@ import ConversationList from './ConversationList';
 import MessageBubble from './MessageBubble';
 import MessageComposer from './MessageComposer';
 import ContactDirectory from './ContactDirectory';
+import MessageSearch from './MessageSearch';
+import ClassResourcesPanel from './ClassResourcesPanel';
+import UserProfileDrawer from './UserProfileDrawer';
 import { PresenceText } from './PresenceDot';
 import { dayLabel, roleIcon } from './chatFormat';
 
@@ -29,11 +32,42 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
     search, setSearch, replyingTo, setReplyingTo, editingMsg, setEditingMsg, editText, setEditText,
     forwardMsg, setForwardMsg, messagesEndRef,
     openConversation, startConversation, createGroupConversation, loadOlder,
-    handleSend, handleEdit, handleDelete, handleReact, handlePin, handleStar,
-    handleReport, handleForward, handleCopy, handleAction, handleMute
+    handleSend, handleResend, handleBulk, handleEdit, handleDelete, handleReact, handlePin, handleStar,
+    handleReport, handleForward, handleCopy, handleAction, handleMute,
+    handleMarkUnread, handleClear, handleBlock
   } = hub;
 
   const [showDirectory, setShowDirectory] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showResources, setShowResources] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [headerMenu, setHeaderMenu] = useState(false);
+  const role = getCurrentRole();
+  const canManageResources = ['teacher', 'super_admin', 'academic_admin', 'discipline_admin'].includes(role);
+
+  useEffect(() => { setSelectMode(false); setSelectedIds(new Set()); setProfileOpen(false); }, [activeConversation?._id]);
+
+  const toggleSelect = (m) => {
+    const id = String(m._id);
+    setSelectedIds((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const exitSelect = () => { setSelectMode(false); setSelectedIds(new Set()); };
+  const runBulk = async (action, scope) => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    if (action === 'delete' && !window.confirm(`Delete ${ids.length} message(s) ${scope === 'me' ? 'for you' : 'for everyone'}?`)) return;
+    setBulkBusy(true);
+    try {
+      const d = await handleBulk(action, ids, scope);
+      exitSelect();
+      Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `${d?.updated || ids.length} updated`, showConfirmButton: false, timer: 1600 });
+    } catch (err) {
+      Swal.fire({ title: err.message || 'Bulk action failed.', icon: 'error', confirmButtonColor: 'var(--navy)' });
+    } finally { setBulkBusy(false); }
+  };
 
   const typingEntry = activeConversation ? isTypingIn(presence, String(activeConversation._id)) : null;
   const typingName = typingEntry?.userId
@@ -101,11 +135,20 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
         }}>
           <div className="ck-sidebar-head">
             <div className="ck-sidebar-search">
-              <input placeholder={showDirectory ? 'Search people…' : 'Search conversations…'} value={showDirectory ? '' : search} onChange={(e) => setSearch(e.target.value)} />
+              <input placeholder={showDirectory ? 'Search people…' : showSearch ? 'Search messages…' : 'Search conversations…'} value={showDirectory || showSearch ? '' : search} onChange={(e) => setSearch(e.target.value)} />
             </div>
+            <button
+              className="ck-iconbtn"
+              title={showSearch ? 'Back to conversations' : 'Search messages'}
+              onClick={() => { setShowSearch((v) => !v); setShowDirectory(false); }}
+            >
+              <i className={`fas ${showSearch ? 'fa-comments' : 'fa-magnifying-glass'}`} />
+            </button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: 8, minHeight: 0 }}>
-            {showDirectory ? (
+            {showSearch ? (
+              <MessageSearch conversations={conversations} onOpen={(conv) => { setShowSearch(false); openConversation(conv); }} />
+            ) : showDirectory ? (
               <ContactDirectory
                 activeUserId={myUserId}
                 onPick={(u) => { setShowDirectory(false); startConversation(u); }}
@@ -126,7 +169,7 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
           </div>
         </aside>
 
-        <section style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <section style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
           {!activeConversation ? (
             <div className="ck-empty">
               <i className="fas fa-comments ck-bigicon" />
@@ -145,7 +188,7 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
                 <div className="ck-avatar sm" style={avatarStyle(headerName)}>
                   <i className={`fas ${activeConversation.type === 'group' ? 'fa-people-group' : roleIcon(activePeer?.role)}`} style={{ fontSize: 12 }} />
                 </div>
-                <div className="ck-thread-title">
+                <div className="ck-thread-title" onClick={() => setProfileOpen(true)} style={{ cursor: 'pointer' }} title="View profile">
                   <div className="ck-thread-name">{headerName}</div>
                   <div className="ck-thread-sub">
                     {activeConversation.type === 'group'
@@ -153,7 +196,63 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
                       : <PresenceText online={!!peerPresence?.isOnline} lastSeenAt={peerPresence?.lastSeenAt} />}
                   </div>
                 </div>
+                <button
+                  className="ck-iconbtn"
+                  title={selectMode ? 'Cancel selection' : 'Select messages'}
+                  onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+                  style={{ marginLeft: 'auto', flex: '0 0 auto' }}
+                >
+                  <i className={`fas ${selectMode ? 'fa-xmark' : 'fa-list-check'}`} />
+                </button>
+                {(activeConversation.classId || activeConversation.category === 'class') && (
+                  <button
+                    className="ck-iconbtn"
+                    title={showResources ? 'Hide class resources' : 'Class resources'}
+                    onClick={() => setShowResources((v) => !v)}
+                    style={{ flex: '0 0 auto' }}
+                  >
+                    <i className={`fas ${showResources ? 'fa-folder-open' : 'fa-folder'}`} />
+                  </button>
+                )}
+                <ThreadMenu
+                  isDirect={activeConversation.type !== 'group'}
+                  canBlock={!!activePeer}
+                  onBlock={() => handleBlock(activePeer, true)}
+                  onClear={() => handleClear(activeConversation)}
+                />
               </div>
+
+              {showResources && activeConversation.classId && (
+                <div style={{ borderBottom: '1px solid var(--border, #dfe3e8)', background: 'var(--surface-2, #f8fafb)', maxHeight: 260, overflowY: 'auto' }}>
+                  <ClassResourcesPanel classId={activeConversation.classId} canManage={canManageResources} />
+                </div>
+              )}
+
+              {selectMode && (
+                <div className="ck-bulkbar">
+                  <span style={{ fontWeight: 700 }}>{selectedIds.size} selected</span>
+                  <button className="ck-quick" title="Mark read" disabled={bulkBusy || !selectedIds.size} onClick={() => runBulk('read')}><i className="fas fa-envelope-open" /></button>
+                  <button className="ck-quick" title="Mark unread" disabled={bulkBusy || !selectedIds.size} onClick={() => runBulk('unread')}><i className="fas fa-envelope" /></button>
+                  <button className="ck-quick" title="Delete for me" disabled={bulkBusy || !selectedIds.size} onClick={() => runBulk('delete', 'me')}><i className="fas fa-trash" /></button>
+                  <button className="ck-quick" title="Delete for everyone" disabled={bulkBusy || !selectedIds.size} onClick={() => runBulk('delete', 'everyone')}><i className="fas fa-trash-can" /></button>
+                  <button className="ck-quick" title="Cancel" onClick={exitSelect}><i className="fas fa-xmark" /></button>
+                </div>
+              )}
+
+              {profileOpen && (
+                <UserProfileDrawer
+                  userId={activeConversation.type !== 'group' ? activePeer?.userId : undefined}
+                  participants={activeConversation.type === 'group'
+                    ? (activeConversation.participants || []).map((p) => ({ userId: p.userId, name: p.name, role: p.role }))
+                    : undefined}
+                  peer={activePeer}
+                  online={!!peerPresence?.isOnline}
+                  canBlockUser={!!activePeer && activeConversation.type !== 'group'}
+                  onMessage={(u) => { setProfileOpen(false); const id = u.userId || u._id; hub.startConversation && hub.startConversation({ ...u, _id: id, id }); }}
+                  onBlock={(u) => { setProfileOpen(false); handleBlock(u, true); }}
+                  onClose={() => setProfileOpen(false)}
+                />
+              )}
 
               {pinned.length > 0 && (
                 <div className="ck-pinned">
@@ -188,9 +287,14 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
                       onReact={handleReact}
                       onPin={handlePin}
                       onStar={handleStar}
+                      onResend={handleResend}
                       onForward={(m) => setForwardMsg(m)}
                       onReport={handleReport}
                       onCopy={handleCopy}
+                      onMarkUnread={handleMarkUnread}
+                      selectable={selectMode}
+                      selected={selectedIds.has(String(item.message._id))}
+                      onSelect={toggleSelect}
                     />
                   )
                 )}
@@ -260,6 +364,29 @@ const MessagingPanel = ({ height = 'calc(100vh - 150px)', onMessageSent, initial
           onCancel={() => setForwardMsg(null)}
           onForward={(ids) => doForward(forwardMsg, ids)}
         />
+      )}
+    </div>
+  );
+};
+
+const ThreadMenu = ({ isDirect, canBlock, onBlock, onClear }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative', marginLeft: 'auto', flex: '0 0 auto' }}>
+      <button className="ck-iconbtn" title="More" onClick={() => setOpen((v) => !v)}>
+        <i className="fas fa-ellipsis-vertical" />
+      </button>
+      {open && (
+        <div className="ck-menu" style={{ right: 0, left: 'auto', minWidth: 180 }} onMouseLeave={() => setOpen(false)}>
+          <button className="ck-menu-item" onClick={() => { setOpen(false); onClear(); }}>
+            <i className="fas fa-broom" /> Clear chat
+          </button>
+          {isDirect && canBlock && (
+            <button className="ck-menu-item danger" onClick={() => { setOpen(false); onBlock(); }}>
+              <i className="fas fa-ban" /> Block user
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

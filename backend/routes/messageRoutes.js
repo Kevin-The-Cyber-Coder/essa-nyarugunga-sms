@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
+const Block = require('../models/Block');
 const Student = require('../models/Student');
 const TeacherProfile = require('../models/TeacherProfile');
 const Class = require('../models/Class');
@@ -176,6 +177,59 @@ router.get('/messages/users', authMiddleware, async (req, res) => {
     };
 
     res.json({ success: true, users: grouped, total: searched.length });
+  } catch (error) {
+    fail(res, 500, error.message);
+  }
+});
+
+// ─── blocking ────────────────────────────────────────────────────────────────
+// A block removes the person from both directories and stops either side from
+// opening a new thread. It deliberately does not erase prior messages: history
+// is shared, and hiding one side of a conversation would make the record lie.
+
+router.get('/messages/blocks', authMiddleware, async (req, res) => {
+  try {
+    const rows = await Block.find({ blockerId: req.userId }).select('blockedId createdAt').lean();
+    const ids = rows.map(r => r.blockedId);
+    const users = ids.length
+      ? await User.find({ _id: { $in: ids } }).select('fullName role profileImage').lean()
+      : [];
+    const byId = new Map(users.map(u => [toId(u._id), u]));
+    res.json({
+      success: true,
+      blocks: rows
+        .map(r => ({ ...byId.get(toId(r.blockedId)), userId: r.blockedId, blockedAt: r.createdAt }))
+        .filter(b => b.fullName)
+    });
+  } catch (error) {
+    fail(res, 500, error.message);
+  }
+});
+
+router.post('/messages/blocks', authMiddleware, async (req, res) => {
+  try {
+    const targetId = req.body?.userId;
+    if (!mongoose.isValidObjectId(targetId)) return fail(res, 400, 'Invalid user.');
+    if (toId(targetId) === toId(req.userId)) return fail(res, 400, 'You cannot block yourself.');
+    if (!(await User.exists({ _id: targetId }))) return fail(res, 404, 'That person could not be found.');
+
+    await Block.updateOne(
+      { blockerId: req.userId, blockedId: targetId },
+      { $setOnInsert: { createdAt: new Date() } },
+      { upsert: true }
+    );
+    res.json({ success: true, blocked: toId(targetId) });
+  } catch (error) {
+    fail(res, 500, error.message);
+  }
+});
+
+router.delete('/messages/blocks/:userId', authMiddleware, async (req, res) => {
+  try {
+    const targetId = req.params.userId;
+    if (!mongoose.isValidObjectId(targetId)) return fail(res, 400, 'Invalid user.');
+    const result = await Block.deleteOne({ blockerId: req.userId, blockedId: targetId });
+    res.json({ success: true, unblocked: result.deletedCount > 0 });
   } catch (error) {
     fail(res, 500, error.message);
   }
@@ -534,6 +588,37 @@ const loadOwnMessage = async (req, res) => {
   }
   return { message, conversation };
 };
+
+// ─── mark one message unread ─────────────────────────────────────────────────
+
+router.put('/messages/:messageId/unread', authMiddleware, async (req, res) => {
+  try {
+    const loaded = await loadOwnMessage(req, res);
+    if (!loaded) return;
+    const { message, conversation } = loaded;
+
+    // Read state is per viewer (readBy), so marking unread only removes the
+    // caller from the list. The roll-up status is then recomputed so a direct
+    // thread does not keep showing a double tick either.
+    const had = (message.readBy || []).some(id => toId(id) === toId(req.userId));
+    if (!had) return res.json({ success: true, unchanged: true });
+
+    message.readBy = message.readBy.filter(id => toId(id) !== toId(req.userId));
+    message.isRead = false;
+    message.readAt = null;
+    await message.save();
+    const updated = await recomputeStatus(message, conversation);
+
+    emitToConversation(conversation, 'message_updated', {
+      message: shapeMessage(updated, req.userId),
+      conversationId: toId(conversation._id)
+    }, req.userId);
+
+    res.json({ success: true, message: shapeMessage(updated, req.userId) });
+  } catch (error) {
+    fail(res, 500, error.message);
+  }
+});
 
 // ─── edit ────────────────────────────────────────────────────────────────────
 
@@ -914,7 +999,9 @@ router.post('/messages/bulk', authMiddleware, async (req, res) => {
 router.get('/messages/search', authMiddleware, async (req, res) => {
   try {
     const term = String(req.query.q || '').trim();
-    if (term.length < 2) return fail(res, 400, 'Enter at least two characters.');
+    const hasFilter = ['type', 'fileKind', 'classId', 'senderId', 'from', 'to', 'hasAttachment', 'starred']
+      .some(k => req.query[k]);
+    if (term.length < 2 && !hasFilter) return fail(res, 400, 'Enter at least two characters or choose a filter.');
 
     const conversations = await Conversation.find({
       'participants.userId': req.userId,
@@ -929,13 +1016,15 @@ router.get('/messages/search', authMiddleware, async (req, res) => {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const filter = {
       conversationId: { $in: conversationIds },
-      $or: [
+      ...visibleTo(req.userId)
+    };
+    if (term.length >= 2) {
+      filter.$or = [
         { content: { $regex: escaped, $options: 'i' } },
         { 'attachments.name': { $regex: escaped, $options: 'i' } },
         { senderName: { $regex: escaped, $options: 'i' } }
-      ],
-      ...visibleTo(req.userId)
-    };
+      ];
+    }
 
     if (req.query.conversationId && mongoose.isValidObjectId(req.query.conversationId)) {
       // Narrowing to one conversation must not widen access to it: the id is
@@ -970,6 +1059,17 @@ router.get('/messages/search', authMiddleware, async (req, res) => {
       }
       if (!Object.keys(filter.createdAt).length) delete filter.createdAt;
     }
+
+    // Restrict to a class's group chats. Scoped through the caller's own
+    // conversation ids, so naming someone else's class id cannot widen reach.
+    if (req.query.classId && mongoose.isValidObjectId(req.query.classId)) {
+      const scoped = await Conversation
+        .find({ _id: { $in: conversationIds }, classId: req.query.classId })
+        .distinct('_id');
+      filter.conversationId = { $in: scoped };
+    }
+    // Attachment kind, e.g. "image", "pdf", "audio".
+    if (req.query.fileKind) filter['attachments.kind'] = String(req.query.fileKind);
 
     const limit = Math.min(Number(req.query.limit) || 30, 100);
     const [results, total] = await Promise.all([

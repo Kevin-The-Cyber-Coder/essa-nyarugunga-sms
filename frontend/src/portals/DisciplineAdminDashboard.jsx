@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import io from 'socket.io-client';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
+import MessagingPanel from '../components/chat/MessagingPanel';
 import { openPrintableDocument } from '../utils/printDocument';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -838,82 +839,11 @@ const DisciplineAdminDashboard = () => {
 
           {/* ══ MESSAGES ══ */}
           {activeTab === 'messages' && (
-            <div style={{ background:'var(--surface-card)', borderRadius: 14, overflow: 'hidden', height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-              <div style={{ padding: '12px 18px', borderBottom:'1px solid var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {['inbox', 'compose'].map(t => (
-                  <button key={t} onClick={() => { setMsgTab(t); if (t === 'compose') { setSelectedUser(null); setMessages([]); } }}
-                    style={{ padding: '7px 18px', borderRadius: 30, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, background: msgTab === t ? '#1a3a5c' : '#f0f3f8', color: msgTab === t ? 'var(--on-solid)' : '#666', transition: 'all .2s' }}>
-                    {t === 'inbox' ? <><i className="fas fa-inbox" style={{ marginRight: 6 }} />Inbox{unread > 0 && <span style={{ marginLeft: 6, background: '#e74c3c', color:'var(--on-solid)', borderRadius: 20, fontSize: 10, padding: '1px 6px' }}>{unread}</span>}</> : <><i className="fas fa-pen" style={{ marginRight: 6 }} />New Message</>}
-                  </button>
-                ))}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
                 <Btn small onClick={() => setMassMessageModal(true)} icon="fas fa-users" color="#3498db">Mass Message</Btn>
               </div>
-              {msgTab === 'inbox' ? (
-                <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-                  <div style={{ width: 260, borderRight:'1px solid var(--border)', display: 'flex', flexDirection: 'column', background:'var(--surface-raised)', flexShrink: 0 }}>
-                    <div style={{ padding: '10px 12px', borderBottom:'1px solid var(--border)' }}>
-                      <div style={{ position: 'relative' }}>
-                        <i className="fas fa-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color:'var(--border-strong)', fontSize: 11 }} />
-                        <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search…" style={{ width: '100%', padding: '7px 10px 7px 28px', border:'1px solid var(--border)', borderRadius: 20, fontSize: 12, boxSizing: 'border-box', outline: 'none' }} />
-                      </div>
-                    </div>
-                    <div style={{ flex: 1, overflowY: 'auto' }}>
-                      {filteredUsers.length === 0 && <div style={{ textAlign: 'center', padding: 28, color:'var(--border-strong)', fontSize: 13 }}>No users found</div>}
-                      {filteredUsers.map(u => (
-                        <div key={u._id} onClick={() => { setSelectedUser(u); fetchConversation(u._id); }}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 12px', cursor: 'pointer', background: selectedUser?._id === u._id ? '#e8f0fe' : 'transparent', borderLeft: selectedUser?._id === u._id ? '3px solid #ffc107' : '3px solid transparent', transition: 'background .15s' }}>
-                          <Avatar name={u.fullName} size={34} img={u.profileImage} />
-                          <div style={{ overflow: 'hidden' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color:'var(--text-body)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.fullName}</div>
-                            <div style={{ fontSize: 10, color: '#ffc107', fontWeight: 700 }}>{roleBadge(u.role).label}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {selectedUser ? (
-                      <>
-                        <div style={{ padding: '12px 16px', borderBottom:'1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 11 }}>
-                          <Avatar name={selectedUser.fullName} size={38} img={selectedUser.profileImage} />
-                          <div><div style={{ fontWeight: 600, fontSize: 14, color:'var(--navy)' }}>{selectedUser.fullName}</div><div style={{ fontSize: 11, color: '#ffc107', fontWeight: 700 }}>{roleBadge(selectedUser.role).label}</div></div>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background:'var(--surface-raised)' }}>
-                          {messages.length === 0 && <div style={{ textAlign: 'center', color:'var(--border-strong)', paddingTop: 40 }}><i className="fas fa-comments" style={{ fontSize: 30, display: 'block', marginBottom: 8 }} />Start a conversation</div>}
-                          {messages.map(m => (
-                            <div key={m._id} className={m.senderId === userId ? 'sent-bubble' : 'recv-bubble'}>
-                              <div>{m.content}</div>
-                              <div style={{ fontSize: 10, opacity: .6, marginTop: 4, textAlign: 'right' }}>{fmtTime(m.createdAt)}</div>
-                            </div>
-                          ))}
-                          <div ref={msgEndRef} />
-                        </div>
-                        <div style={{ padding: '10px 14px', borderTop:'1px solid var(--border)', display: 'flex', gap: 9, background:'var(--surface-card)', alignItems: 'flex-end' }}>
-                          <textarea value={msgText} onChange={e => setMsgText(e.target.value)} placeholder={`Message ${selectedUser.fullName}…`} rows={2}
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                            style={{ flex: 1, padding: '9px 12px', border:'1.5px solid var(--surface-sunken-2)', borderRadius: 12, resize: 'none', fontFamily: 'inherit', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
-                          <button onClick={sendMessage} disabled={!msgText.trim()} style={{ width: 40, height: 40, background: msgText.trim() ? '#1a3a5c' : '#ddd', border: 'none', borderRadius: '50%', cursor: msgText.trim() ? 'pointer' : 'default', color:'var(--on-solid)', fontSize: 15, flexShrink: 0 }}><i className="fas fa-paper-plane" /></button>
-                        </div>
-                      </>
-                    ) : <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color:'var(--border-strong)', gap: 10 }}><i className="fas fa-comments" style={{ fontSize: 44, opacity: .3 }} /><div style={{ fontSize: 14 }}>Select a user to message</div></div>}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ flex: 1, padding: 24, maxWidth: 580, margin: '0 auto', width: '100%', overflowY: 'auto' }}>
-                  <h3 style={{ margin: '0 0 18px', color:'var(--navy)', fontFamily: 'Georgia, serif' }}>New Message</h3>
-                  <Field label="Recipient" required>
-                    <Sel value={selectedUser?._id || ''} onChange={e => setSelectedUser(msgUsers.find(u => u._id === e.target.value) || null)}>
-                      <option value="">Select user…</option>
-                      {msgUsers.map(u => <option key={u._id} value={u._id}>{u.fullName} — {roleBadge(u.role).label}</option>)}
-                    </Sel>
-                  </Field>
-                  <Field label="Message" required>
-                    <Txt value={msgText} onChange={e => setMsgText(e.target.value)} rows={7} placeholder="Type your message…" />
-                  </Field>
-                  <Btn icon="fas fa-paper-plane" color="#1a3a5c" style={{ width: '100%', justifyContent: 'center', padding: 11, marginTop: 4 }}
-                    onClick={async () => { if (!selectedUser || !msgText.trim()) { Swal.fire('Error', 'Select recipient and enter message', 'warning'); return; } await sendMessage(); Swal.fire('✅ Sent!', '', 'success'); setMsgTab('inbox'); }}>Send Message</Btn>
-                </div>
-              )}
+              <MessagingPanel recipient={selectedUser || undefined} height="calc(100vh - 200px)" />
             </div>
           )}
 

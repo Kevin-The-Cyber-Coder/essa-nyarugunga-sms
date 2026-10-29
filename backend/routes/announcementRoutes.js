@@ -8,7 +8,7 @@ const requireRole = require('../middleware/roleCheck');
 const { isStaffRole, visibleToAudience } = require('../utils/announcementAudience');
 const { buildCallerContexts, resolveAnnouncementRecipients } = require('../utils/announcementRecipients');
 const { teacherOwnsClass } = require('../utils/access');
-const { notifyMany } = require('../utils/notifier');
+const { broadcastAnnouncement, publishDueAnnouncements } = require('../utils/announcementBroadcast');
 
 const router = express.Router();
 
@@ -54,29 +54,18 @@ const sanitizeTargeting = async (body) => {
   return { classIds: cleanClasses, grades: cleanGrades, userIds: cleanUsers };
 };
 
-// Fan-out. Fire-and-forget from the caller's point of view: the announcement
-// is already stored, and a slow mailbox must not hold up the post. Recipient
-// resolution is the same predicate that decides portal visibility, minus staff
-// oversight, so nobody is notified about something they cannot see and nobody
-// who was addressed misses it.
-const broadcastAnnouncement = (announcement) => {
-  resolveAnnouncementRecipients(announcement)
-    .then(async (recipients) => {
-      if (!recipients.length) return;
-      const author = await User.findById(announcement.createdBy).select('fullName').lean();
-      await notifyMany(recipients, {
-        type: 'announcement',
-        title: announcement.title,
-        body: String(announcement.content || '').replace(/\s+/g, ' ').substring(0, 200),
-        link: '/announcements',
-        announcementId: announcement._id,
-        actorId: announcement.createdBy,
-        actorName: (author && author.fullName) || 'Administration'
-      });
-    })
-    .catch(err => console.error('Announcement notification failed:', err.message));
+// Turn a scheduled time into a Date, or null when absent/invalid. Anything in
+// the past collapses to "publish now" so a stale form submission is not held.
+const parseScheduledAt = (raw) => {
+  if (!raw) return null;
+  const when = new Date(raw);
+  if (Number.isNaN(when.getTime())) return null;
+  return when.getTime() > Date.now() ? when : null;
 };
 
+// Escape user input before dropping it into a RegExp, otherwise a search for
+// "(" or ".*" either throws or turns into a costly pattern.
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Requires a session. This used to be public, which meant a discipline notice
 // addressed to parents was handed to any anonymous visitor. Only the four staff
@@ -84,8 +73,24 @@ const broadcastAnnouncement = (announcement) => {
 // in account sees whole-school notices plus the ones addressed to its own role.
 router.get('/announcements', authMiddleware, async (req, res) => {
   try {
-    const announcements = await Announcement.find({ isActive: true }).sort({ createdAt: -1 });
+    // Cheap safety net: if the scheduler has not ticked since a notice came due,
+    // this promotes it now so the reader's own request is what publishes it.
+    await publishDueAnnouncements().catch(() => {});
+
     const staff = isStaffRole(req.userRole);
+    const query = { isActive: true };
+    // A held notice is only visible to staff, who need to review or edit it
+    // before the audience ever sees it.
+    if (!staff) query.publishedAt = { $ne: null };
+
+    const search = String(req.query.q || '').trim();
+    if (search) {
+      const rx = new RegExp(escapeRegex(search.substring(0, 80)), 'i');
+      query.$or = [{ title: rx }, { content: rx }];
+    }
+    if (req.query.priority) query.priority = String(req.query.priority);
+
+    const announcements = await Announcement.find(query).sort({ createdAt: -1 });
 
     // Built from the shared context builder rather than a per-role branch: the
     // same structure feeds notification fan-out, so a pupil, a parent with
@@ -100,17 +105,71 @@ router.get('/announcements', authMiddleware, async (req, res) => {
       ? announcements
       : announcements.filter((a) => visibleToAudience(a, caller));
 
-const formatted = visible.map(ann => ({
+    const formatted = visible.map(ann => ({
       ...ann.toObject(),
       audience: Array.isArray(ann.audience) ? ann.audience[0] : (ann.audience || 'all'),
       // The admin screens read `audience` as a single word, so it stays that
       // way here. Anything that needs the real list, such as the audit trail on
       // a class notice, reads this instead.
-      audienceList: Array.isArray(ann.audience) ? ann.audience : (ann.audience ? [ann.audience] : ['all'])
+      audienceList: Array.isArray(ann.audience) ? ann.audience : (ann.audience ? [ann.audience] : ['all']),
+      readByMe: (ann.readBy || []).some((id) => String(id) === String(req.userId)),
+      // Only staff get the tally; a pupil has no business seeing who has read
+      // what, and the raw list never leaves the server here.
+      readCount: staff ? (ann.readBy || []).length : undefined
     }));
     res.json(formatted);
   } catch (error) {
     console.error('GET /api/announcements error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Marks the notice read for the caller. Idempotent via $addToSet, so the
+// portal can call it on open without tracking whether it already fired.
+router.put('/announcements/:id/read', authMiddleware, async (req, res) => {
+  try {
+    if (!/^[0-9a-fA-F]{24}$/.test(String(req.params.id))) {
+      return res.status(400).json({ message: 'Invalid announcement id.' });
+    }
+    const announcement = await Announcement.findByIdAndUpdate(
+      req.params.id,
+      { $addToSet: { readBy: req.userId } },
+      { new: true }
+    ).select('readBy');
+    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+    res.json({ success: true, readCount: (announcement.readBy || []).length });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Read receipts: who was reached and who has acknowledged. Author or any staff
+// account can pull this; the recipient list is resolved by the same predicate
+// that decides visibility, so the denominator matches the real audience.
+router.get('/announcements/:id/receipts', authMiddleware, async (req, res) => {
+  try {
+    if (!isStaffRole(req.userRole) && !['teacher'].includes(req.userRole)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    if (!/^[0-9a-fA-F]{24}$/.test(String(req.params.id))) {
+      return res.status(400).json({ message: 'Invalid announcement id.' });
+    }
+    const announcement = await Announcement.findById(req.params.id);
+    if (!announcement) return res.status(404).json({ message: 'Announcement not found' });
+
+    const recipients = await resolveAnnouncementRecipients(announcement);
+    const readerIds = (announcement.readBy || []).map(String);
+    const readerSet = new Set(readerIds);
+    const readers = await User.find({ _id: { $in: readerIds } }).select('fullName role').lean();
+
+    res.json({
+      success: true,
+      recipientCount: recipients.length,
+      readCount: readerIds.length,
+      readers: readers.map((u) => ({ _id: u._id, fullName: u.fullName, role: u.role })),
+      unreadCount: Math.max(0, recipients.length - recipients.filter((r) => readerSet.has(String(r))).length)
+    });
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
@@ -130,6 +189,8 @@ const createStaffAnnouncement = async (req, res) => {
   const targeting = await sanitizeTargeting(req.body);
   if (targeting.error) return res.status(400).json({ message: targeting.error });
 
+  const scheduledAt = parseScheduledAt(req.body.scheduledAt);
+
   const announcement = await Announcement.create({
     title: req.body.title,
     content: req.body.content,
@@ -139,10 +200,13 @@ const createStaffAnnouncement = async (req, res) => {
     userIds: targeting.userIds,
     priority: req.body.priority || 'normal',
     createdBy: req.userId,
+    scheduledAt,
+    // A held notice is stored unpublished; the scheduler fans it out later.
+    publishedAt: scheduledAt ? null : new Date(),
     isActive: true
   });
 
-  broadcastAnnouncement(announcement);
+  if (!scheduledAt) broadcastAnnouncement(announcement);
 
   res.json({
     success: true,
@@ -171,7 +235,9 @@ router.get('/super-admin/announcements', authMiddleware, requireRole('super_admi
     const announcements = await Announcement.find().sort({ createdAt: -1 });
     const formatted = announcements.map(ann => ({
       ...ann.toObject(),
-      audience: Array.isArray(ann.audience) ? ann.audience[0] : (ann.audience || 'all')
+      audience: Array.isArray(ann.audience) ? ann.audience[0] : (ann.audience || 'all'),
+      readCount: (ann.readBy || []).length,
+      readByMe: false
     }));
     res.json(formatted);
   } catch (error) {
@@ -216,11 +282,27 @@ router.put('/super-admin/announcements/:id', authMiddleware, requireRole('super_
       updates.userIds = targeting.userIds;
     }
 
+    // Rescheduling is allowed while the notice is still held. Publishing is a
+    // one-way door: once `publishedAt` is stamped an edit cannot un-send it, so
+    // the schedule field is only meaningful for something not yet out.
+    let publishNow = null;
+    if (req.body.scheduledAt !== undefined) {
+      const when = parseScheduledAt(req.body.scheduledAt);
+      updates.scheduledAt = when;
+      if (!existing.publishedAt && !when) publishNow = new Date();
+    }
+
     const announcement = await Announcement.findByIdAndUpdate(
       req.params.id,
       { $set: updates },
       { new: true, runValidators: true }
     );
+
+    if (publishNow) {
+      announcement.publishedAt = publishNow;
+      await announcement.save();
+      broadcastAnnouncement(announcement);
+    }
 
     res.json({
       success: true,
@@ -268,6 +350,8 @@ router.post('/teacher/announcements', authMiddleware, requireRole('teacher'), as
       return res.status(403).json({ message: 'You are not responsible for any of those classes' });
     }
 
+    const scheduledAt = parseScheduledAt(req.body.scheduledAt);
+
     const announcement = await Announcement.create({
       title,
       content,
@@ -278,10 +362,12 @@ router.post('/teacher/announcements', authMiddleware, requireRole('teacher'), as
       classIds: permitted,
       priority: ['low', 'normal', 'high'].includes(req.body.priority) ? req.body.priority : 'normal',
       createdBy: req.userId,
+      scheduledAt,
+      publishedAt: scheduledAt ? null : new Date(),
       isActive: true
     });
 
-    broadcastAnnouncement(announcement);
+    if (!scheduledAt) broadcastAnnouncement(announcement);
 
     res.status(201).json({
       success: true,
