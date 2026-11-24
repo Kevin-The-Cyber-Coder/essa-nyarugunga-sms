@@ -149,7 +149,7 @@ const buildTermResults = async ({ classId, term, year }) => {
   return { rows, hasWeights, subjectsByClass, classes };
 };
 
-router.get('/report-cards', authMiddleware, requireRole('academic_admin', 'super_admin', 'discipline_admin'), async (req, res) => {
+router.get('/report-cards', authMiddleware, requireRole('academic_admin', 'headmaster', 'discipline_admin'), async (req, res) => {
   try {
     const { classId, term, year } = req.query;
     if (!term || !year) return res.status(400).json({ message: 'term and year are required' });

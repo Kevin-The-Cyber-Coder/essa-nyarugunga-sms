@@ -7,11 +7,11 @@ const Student = require('../models/Student');
 const SubjectAllocation = require('../models/SubjectAllocation');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
-const { authorizeStudentAccess, teacherOwnsClass, allowedClassIds, isStaff } = require('../utils/access');
+const { authorizeStudentAccess, teacherOwnsClass, allowedClassIds, isAdminRole } = require('../utils/access');
 
 const router = express.Router();
 
-const manage = requireRole('academic_admin', 'super_admin');
+const manage = requireRole('academic_admin', 'headmaster');
 
 const letterGrade = (pct) => {
   if (pct >= 80) return 'A';
@@ -43,7 +43,7 @@ router.get('/exams', authMiddleware, async (req, res) => {
         if (owned.some(Boolean)) visible.push(exam);
       }
       exams = visible;
-    } else if (!isStaff(req.userRole)) {
+    } else if (!isAdminRole(req.userRole)) {
       // A pupil or a parent used to receive every exam in the school, including
       // other classes' papers and anything not yet published. They now see only
       // published exams addressed to a class they are actually in.
@@ -66,7 +66,7 @@ router.get('/exams/:id', authMiddleware, async (req, res) => {
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
     const classIds = new Set((exam.classIds || []).map(c => String(c._id)));
-    const staff = isStaff(req.userRole);
+    const staff = isAdminRole(req.userRole);
 
     // A pupil or parent may only reach an exam for their own class, and only
     // once it is published. Before this, any signed-in account could walk the

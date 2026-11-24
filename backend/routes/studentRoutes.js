@@ -159,7 +159,7 @@ router.get('/student/grades/:studentId', authMiddleware, async (req, res) => {
       if (req.userRole === 'student') {
         return res.status(403).json({ message: 'You can only view your own grades' });
       }
-      if (!['academic_admin', 'super_admin', 'teacher', 'parent'].includes(req.userRole)) {
+      if (!['academic_admin', 'headmaster', 'teacher', 'parent'].includes(req.userRole)) {
         return res.status(403).json({ message: 'Access denied' });
       }
     }

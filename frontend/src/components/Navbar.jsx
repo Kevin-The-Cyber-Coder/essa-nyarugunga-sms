@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ROLE_ROUTES, normalizeRole } from '../config/roles';
 import logo from '../assets/logo.png';
 
 const Navbar = () => {
@@ -25,18 +26,7 @@ const Navbar = () => {
     navigate('/');
   };
 
-  const getDashboardLink = () => {
-    switch(userRole) {
-      case 'student': return '/portal/student';
-      case 'teacher': return '/portal/teacher';
-      case 'parent': return '/portal/parent';
-      case 'super_admin': return '/portal/super-admin';
-      case 'academic_admin': return '/portal/academic-admin';
-      case 'accounts_admin': return '/portal/accounts-admin';
-      case 'discipline_admin': return '/portal/discipline-admin';
-      default: return '/portal/login';
-    }
-  };
+  const getDashboardLink = () => ROLE_ROUTES[normalizeRole(userRole)] || '/portal/login';
 
   return (
     <nav className="navbar">

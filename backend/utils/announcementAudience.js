@@ -7,10 +7,11 @@
 // private notice reached the public and not its intended readers.
 
 const ROLES = {
-  super_admin:      ['super_admin', 'admins', 'staff'],
+  headmaster:      ['headmaster', 'admins', 'staff'],
   academic_admin:   ['academic_admin', 'admins', 'staff'],
   discipline_admin: ['discipline_admin', 'admins', 'staff'],
   accounts_admin:   ['accounts_admin', 'admins', 'staff'],
+  admin_assistant:  ['admin_assistant', 'admins', 'staff'],
   teacher:          ['teacher', 'teachers', 'staff'],
   student:          ['student', 'students', 'pupils'],
   parent:           ['parent', 'parents', 'guardians']
@@ -31,8 +32,10 @@ const audienceMatchesRole = (audience, role) => {
   return audience.some((a) => keys.includes(a));
 };
 
-const isStaffRole = (role) =>
-  ['super_admin', 'academic_admin', 'discipline_admin', 'accounts_admin'].includes(String(role || '').toLowerCase());
+const { isAdminRole: adminCheck } = require('../config/roles');
+// Portal-wide oversight is an administrator concern; teachers keep their
+// class-scoped view below.
+const isStaffRole = (role) => adminCheck(String(role || '').toLowerCase());
 
 // Announcements can be addressed to a year group ("S3") as well as a role, and
 // the stored value is free text, so match on the grade as a substring. This is

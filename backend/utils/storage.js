@@ -175,7 +175,7 @@ const s3Client = () => {
 
 // Writes a buffer to the configured provider.
 // Returns { url, key, provider, size }.
-const uploadBuffer = async ({ buffer, filename, mime, folder = 'chat', baseUrl }) => {
+const uploadBuffer = async ({ buffer, filename, mime, folder = 'resources', baseUrl }) => {
   const provider = assertConfigured();
   const ext = path.extname(filename || '');
   const key = path.posix.join(folder, randomName(ext));

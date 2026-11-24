@@ -1,20 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ROLE_ROUTES, normalizeRole } from '../config/roles';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 const BG =
   'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1600&q=80';
-
-const DASHBOARDS = {
-  super_admin: '/portal/super-admin',
-  academic_admin: '/portal/academic-admin',
-  discipline_admin: '/portal/discipline-admin',
-  accounts_admin: '/portal/accounts-admin',
-  teacher: '/portal/teacher',
-  student: '/portal/student',
-  parent: '/portal/parent',
-};
 
 const TABS = [
   { id: 'email', label: 'Email', icon: 'fa-envelope' },
@@ -36,7 +27,7 @@ const store = {
 
 const saveSession = (d) => {
   store.set('portalToken', d.token);
-  store.set('userRole', d.role);
+  store.set('userRole', normalizeRole(d.role));
   store.set('userName', d.fullName);
   store.set('userEmail', d.email || '');
   store.set('userId', d._id);
@@ -179,7 +170,7 @@ const PortalLogin = () => {
       if (rememberMe) store.set('rememberedEmail', email.trim());
       else store.remove('rememberedEmail');
 
-      navigate(data.mustChangePassword ? '/portal/change-password' : DASHBOARDS[data.role] || '/portal/login');
+      navigate(data.mustChangePassword ? '/portal/change-password' : (ROLE_ROUTES[normalizeRole(data.role)] || '/portal/login'));
     });
   };
 
@@ -465,7 +456,7 @@ const PortalLogin = () => {
             )}
 
             <p className="pl-legal">
-              By signing in you agree to our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.
+              By signing in you agree to our <Link to="/terms-of-use">Terms</Link> and <Link to="/privacy-policy">Privacy Policy</Link>.
             </p>
           </section>
         </div>

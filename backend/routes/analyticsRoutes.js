@@ -9,7 +9,7 @@ const requireRole = require('../middleware/roleCheck');
 
 const router = express.Router();
 
-const manage = requireRole('academic_admin', 'super_admin');
+const manage = requireRole('academic_admin', 'headmaster');
 
 const dayKey = (d) => {
   const x = new Date(d);

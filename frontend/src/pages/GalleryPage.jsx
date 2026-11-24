@@ -16,12 +16,14 @@ const GalleryPage = () => {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('grid'); // grid or masonry
 
+  // Matches the CMS categories in config/roles.js so anything published by an
+  // authorized dashboard is reachable from the public site.
   const categories = [
     { id: 'all', name: 'All Photos', icon: 'fas fa-th-large', color: '#1a3a5c', bgLight: '#e8f0fe' },
     { id: 'academic', name: 'Academic', icon: 'fas fa-graduation-cap', color: '#27ae60', bgLight: '#e8f5e9' },
-    { id: 'sports', name: 'Sports', icon: 'fas fa-futbol', color: '#f39c12', bgLight: '#fff3e0' },
-    { id: 'cultural', name: 'Cultural', icon: 'fas fa-music', color: '#9b59b6', bgLight: '#f3e5f5' },
-    { id: 'events', name: 'Events', icon: 'fas fa-calendar-alt', color: '#e74c3c', bgLight: '#fdecea' }
+    { id: 'discipline', name: 'Discipline', icon: 'fas fa-gavel', color: '#e74c3c', bgLight: '#fdecea' },
+    { id: 'financial', name: 'Financial', icon: 'fas fa-wallet', color: '#f39c12', bgLight: '#fff3e0' },
+    { id: 'general', name: 'General', icon: 'fas fa-image', color: '#9b59b6', bgLight: '#f3e5f5' }
   ];
 
   useEffect(() => {

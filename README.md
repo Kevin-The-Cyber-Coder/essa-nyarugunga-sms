@@ -10,12 +10,11 @@ Enter email: admin@essa.rw
 
 Enter password: admin123
 
-Select role: Super Admin
-
-Click "Sign In"
+Click "Sign In" — the account's role determines the portal you are redirected to.
+There is no role selector; the backend decides the role from the account record.
 
 2. Creating an Academic Admin
-Go to Super Admin Dashboard
+Go to Headmaster Dashboard
 
 Click "Create Admin"
 
@@ -63,9 +62,9 @@ Select teacher from dropdown
 Confirm assignment
 
 6. Creating Student Accounts
-Login as Teacher
+Login as Admin Assistant (after the Headmaster approves the application)
 
-Go to "Student Management"
+Go to "Applications" and register the approved applicant, or use "Students" for manual records
 
 Click "Create Student"
 
@@ -99,6 +98,23 @@ Set total points
 
 Publish assignment
 
+Role model
+There are exactly eight internal roles, enforced on both the frontend and the backend:
+
+- headmaster — final admissions decisions, oversight, website content
+- academic_admin — classes, subjects, teachers, exams and final result publication
+- discipline_admin — discipline cases and conduct records
+- accounts_admin — fees, invoices, payments, expenses and budgets
+- admin_assistant — application review, registration and parent/student linking
+- teacher — assigned classes/subjects, marks, attendance and class resources
+- parent — linked/verified children only
+- student — own records only
+
+Website content (news and gallery) is managed from an embedded "Website content"
+panel inside an authorized dashboard; there is no standalone CMS login or route.
+Admissions move through submitted → under_review (Admin Assistant) →
+approved/rejected (Headmaster) → registered (Admin Assistant).
+
 🧪 Testing
 API Testing with cURL
 bash
@@ -108,7 +124,7 @@ curl http://localhost:5000/api/health
 # Login
 curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@essa.rw","password":"admin123","role":"super_admin"}'
+  -d '{"email":"admin@essa.rw","password":"admin123"}'
 
 # Get all classes (with token)
 curl http://localhost:5000/api/academic-admin/classes \
@@ -129,8 +145,7 @@ const testAPI = async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       email: 'admin@essa.rw',
-      password: 'admin123',
-      role: 'super_admin'
+      password: 'admin123'
     })
   });
   
@@ -471,7 +486,7 @@ Report Issues: https://github.com/yourusername/essa-nyarugunga/issues
 
 Documentation: https://docs.essa.rw
 
-Live Chat: Available on website
+Notifications: in-app and email only (no chat, SMS or push alerts)
 
 🙏 Acknowledgments
 Thanks to all contributors and testers
@@ -491,7 +506,7 @@ text
 ├── Frontend
 │   ├── 15 React Components
 │   ├── 6 Main Pages
-│   ├── 4 Role-based Dashboards
+│   ├── 8 Role-based Dashboards
 │   └── 2,800+ Lines of Code
 │
 └── Database

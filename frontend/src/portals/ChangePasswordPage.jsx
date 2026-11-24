@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { ROLE_ROUTES, normalizeRole } from '../config/roles';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -75,16 +76,7 @@ const ChangePasswordPage = () => {
       });
 
       setTimeout(() => {
-        const dashboards = {
-          super_admin: '/portal/super-admin',
-          academic_admin: '/portal/academic-admin',
-          discipline_admin: '/portal/discipline-admin',
-          accounts_admin: '/portal/accounts-admin',
-          teacher: '/portal/teacher',
-          student: '/portal/student',
-          parent: '/portal/parent'
-        };
-        navigate(dashboards[localStorage.getItem('userRole')] || '/portal/login');
+        navigate(ROLE_ROUTES[normalizeRole(localStorage.getItem('userRole'))] || '/portal/login');
       }, 1500);
     } catch {
       setError('Connection error. Please check your internet connection and try again.');

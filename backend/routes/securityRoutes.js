@@ -6,23 +6,23 @@ const { clearLock, MAX_FAILED_ATTEMPTS, LOCK_MINUTES } = require('../utils/login
 
 const router = express.Router();
 
-// Security overview for the super admin: who has been locked out, and a
+// Security overview for the headmaster: who has been locked out, and a
 // paginated audit trail of sign-in attempts.
 //
-// Restricted to super_admin. Every other role is excluded deliberately - this
+// Restricted to headmaster. Every other role is excluded deliberately - this
 // trail exposes IP addresses and the timing of failed logins, which is exactly
 // the information an attacker would want to calibrate a spray against, and it
 // is also staff disciplinary material.
-const requireSuperAdmin = (req, res, next) => {
-  if (req.userRole !== 'super_admin') {
-    return res.status(403).json({ message: 'Super admin access required' });
+const requireHeadmaster = (req, res, next) => {
+  if (req.userRole !== 'headmaster') {
+    return res.status(403).json({ message: 'Headmaster access required' });
   }
   next();
 };
 
 // Paged recent attempts. Defaults to the last 24 hours, because "show me
 // everything ever" is never the useful first question during an incident.
-router.get('/security/login-attempts', authMiddleware, requireSuperAdmin, async (req, res) => {
+router.get('/security/login-attempts', authMiddleware, requireHeadmaster, async (req, res) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -70,7 +70,7 @@ router.get('/security/login-attempts', authMiddleware, requireSuperAdmin, async 
 });
 
 // Accounts that are currently locked, plus the counters that explain why.
-router.get('/security/locked-accounts', authMiddleware, requireSuperAdmin, async (req, res) => {
+router.get('/security/locked-accounts', authMiddleware, requireHeadmaster, async (req, res) => {
   try {
     const now = new Date();
     const [locked, recentFailures] = await Promise.all([
@@ -110,7 +110,7 @@ router.get('/security/locked-accounts', authMiddleware, requireSuperAdmin, async
 // Manual unlock. Support needs this when a genuine user trips the lockout, and
 // removing the lock by editing the database directly would leave the counters
 // in a state the code does not expect.
-router.post('/security/unlock/:userId', authMiddleware, requireSuperAdmin, async (req, res) => {
+router.post('/security/unlock/:userId', authMiddleware, requireHeadmaster, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ message: 'User not found' });

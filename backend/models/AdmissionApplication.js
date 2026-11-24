@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 // an enum because the API validates against this list before writing: a bare
 // findByIdAndUpdate skips schema validators unless told otherwise, which had
 // left the door open for any string to be stored as a status.
-const APPLICATION_STATUSES = ['pending', 'reviewing', 'shortlisted', 'accepted', 'rejected', 'waitlisted'];
+const APPLICATION_STATUSES = ['submitted', 'under_review', 'approved', 'rejected', 'registered'];
 
 // One rubric line. Scored out of 10 rather than 100 so the reviewer is grading on
 // a scale they can hold in their head, and the four are averaged into a
@@ -62,7 +62,7 @@ const admissionApplicationSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: APPLICATION_STATUSES,
-    default: 'pending'
+    default: 'submitted'
   },
   rubric: { type: rubricSchema, default: () => ({}) },
   // The internal decision note. Deliberately not shown to the applicant.

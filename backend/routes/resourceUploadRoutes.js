@@ -13,8 +13,8 @@ const {
 
 const router = express.Router();
 
-// The client asks for the rules before it opens the picker, so validation
-// happens in the file dialog rather than after a failed upload.
+// The client asks for the rules before opening the picker so validation happens
+// in the file dialog rather than after a failed upload.
 router.get('/files/config', authMiddleware, (req, res) => {
   res.json({
     success: true,
@@ -27,26 +27,19 @@ router.get('/files/config', authMiddleware, (req, res) => {
   });
 });
 
-// Attaches files. Nothing here claims they belong to a conversation - the
-// caller passes the returned descriptors to the message endpoint, which is
-// what enforces membership. Uploading on its own is harmless and size limited.
+// Generic authenticated file storage. The returned descriptors are consumed by
+// the class resource endpoints; those endpoints enforce class access.
 router.post('/files/upload', authMiddleware, (req, res) => {
   upload.array('files', 5)(req, res, async (multerError) => {
     const uploadError = describeMulterError(multerError);
-    if (uploadError) {
-      return res.status(413).json({ success: false, message: uploadError });
-    }
-    if (multerError) {
-      return res.status(400).json({ success: false, message: multerError.message });
-    }
+    if (uploadError) return res.status(413).json({ success: false, message: uploadError });
+    if (multerError) return res.status(400).json({ success: false, message: multerError.message });
 
     try {
       const files = req.files || [];
-      if (!files.length) {
-        return res.status(400).json({ success: false, message: 'No file was provided.' });
-      }
+      if (!files.length) return res.status(400).json({ success: false, message: 'No file was provided.' });
 
-      const rejected = files.find(f => !extensionAllowed(f.originalname));
+      const rejected = files.find((f) => !extensionAllowed(f.originalname));
       if (rejected) {
         return res.status(415).json({
           success: false,
@@ -54,27 +47,23 @@ router.post('/files/upload', authMiddleware, (req, res) => {
         });
       }
 
-      // Scan everything before storing anything. Interleaving the two would
-      // leave earlier files orphaned in storage when a later one is rejected.
+      // Scan everything before storing anything so a rejected file cannot
+      // leave earlier files orphaned in storage.
       for (const file of files) {
         const verdict = await scanBuffer(file.buffer, file.originalname);
-        if (!verdict.clean) {
-          return res.status(422).json({ success: false, message: verdict.reason });
-        }
+        if (!verdict.clean) return res.status(422).json({ success: false, message: verdict.reason });
       }
 
       const baseUrl = `${req.protocol}://${req.get('host')}`;
       const stored = [];
-
       for (const file of files) {
         const saved = await uploadBuffer({
           buffer: file.buffer,
           filename: file.originalname,
           mime: file.mimetype,
-          folder: 'chat',
+          folder: 'resources',
           baseUrl
         });
-
         stored.push({
           url: saved.url,
           name: file.originalname,

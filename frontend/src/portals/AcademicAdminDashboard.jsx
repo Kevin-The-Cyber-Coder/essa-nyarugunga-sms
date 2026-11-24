@@ -1,20 +1,17 @@
   import React, { useState, useEffect, useRef, useCallback } from 'react';
   import { useNavigate } from 'react-router-dom';
   import Swal from 'sweetalert2';
-  import io from 'socket.io-client';
   import {
     TimetablePanel, SubjectAllocationPanel, ExamsPanel, ReportCardsPanel,
     PromotionPanel, AnalyticsPanel, LessonReviewPanel, SdmsPanel
   } from './AcademicPanels';
   import { CalendarPanel } from './CalendarPanel';
-  import ApplicationsPanel from './ApplicationsPanel';
+  import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
   import GroupedNav from '../components/GroupedNav';
   import ThemeToggle from '../components/ThemeToggle';
   import PreferencesPanel from '../components/PreferencesPanel';
-import MessagingPanel from '../components/chat/MessagingPanel';
 
   const API_URL = import.meta.env.VITE_API_URL;
-  const SOCKET_URL = API_URL;
   const getToken = () => localStorage.getItem('portalToken');
   const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
@@ -24,7 +21,7 @@ import MessagingPanel from '../components/chat/MessagingPanel';
 
   const roleBadge = (role) => {
     const map = {
-      super_admin: { label: 'Super Admin', color: '#ffc107', bg:'var(--tint-amber)' },
+      headmaster: { label: 'Headmaster', color: '#ffc107', bg:'var(--tint-amber)' },
       academic_admin: { label: 'Academic Admin', color: '#27ae60', bg:'var(--tint-success)' },
       discipline_admin: { label: 'Discipline Admin', color: '#e74c3c', bg:'var(--tint-danger)' },
       accounts_admin: { label: 'Accounts Admin', color: '#3498db', bg:'var(--tint-primary)' },
@@ -128,7 +125,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
   // ═══════════════════════════════════════════════════════════════════
   const AcademicAdminDashboard = () => {
     const navigate = useNavigate();
-    const msgEndRef = useRef(null);
 
     // layout
     const [activeTab, setActiveTab] = useState('overview');
@@ -141,40 +137,18 @@ import MessagingPanel from '../components/chat/MessagingPanel';
     const [teachers, setTeachers] = useState([]);
     const [classes, setClasses] = useState([]);
     const [students, setStudents] = useState([]);
-    const [news, setNews] = useState([]);
-    const [gallery, setGallery] = useState([]);
     const [announcements, setAnnouncements] = useState([]);
     const [studentPerformance, setStudentPerformance] = useState([]);
     const [classPerformance, setClassPerformance] = useState([]);
-    // Status tallies for the sidebar badge and overview card. The list itself
-    // lives in ApplicationsPanel; the dashboard only needs the counts, which
-    // arrive in one row-sized request.
-    const [applicationCounts, setApplicationCounts] = useState({});
-
     // modals
     const [teacherModal, setTeacherModal] = useState(false);
     const [classModal, setClassModal] = useState(false);
     const [studentModal, setStudentModal] = useState(false);
-    const [newsModal, setNewsModal] = useState(false);
-    const [galleryModal, setGalleryModal] = useState(false);
     const [teacherForm, setTeacherForm] = useState({ fullName: '', email: '', password: '', subject: '', phone: '' });
     const [classForm, setClassForm] = useState({ className: '', grade: 'S1', academicYear: new Date().getFullYear().toString(), teacherId: '' });
     const [studentForm, setStudentForm] = useState({ fullName: '', email: '', classId: '', parentName: '', parentPhone: '' });
-    const [newsForm, setNewsForm] = useState({ title: '', summary: '', content: '', category: 'news', tags: '' });
-    const [galleryForm, setGalleryForm] = useState({ title: '', category: 'events', description: '' });
-    const [newsImageFile, setNewsImageFile] = useState(null);
-    const [galleryImageFile, setGalleryImageFile] = useState(null);
     const [saving, setSaving] = useState(false);
 
-    // messaging
-    const [msgUsers, setMsgUsers] = useState([]);
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [msgText, setMsgText] = useState('');
-    const [msgTab, setMsgTab] = useState('inbox');
-    const [unread, setUnread] = useState(0);
-    const [msgSearch, setMsgSearch] = useState('');
-    const [socket, setSocket] = useState(null);
 
     const userName = localStorage.getItem('userName') || 'Academic Admin';
     const userId = localStorage.getItem('userId');
@@ -185,24 +159,12 @@ import MessagingPanel from '../components/chat/MessagingPanel';
       check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check);
     }, []);
 
-    // socket
-    useEffect(() => {
-      const token = getToken(); if (!token) return;
-      const sock = io(SOCKET_URL, { auth: { token } });
-      setSocket(sock);
-      if (userId) sock.emit('join', userId);
-      sock.on('new_message', () => { fetchUnread(); fetchMsgUsers(); });
-      return () => sock.disconnect();
-    }, [userId]);
-
     // auth + load
     useEffect(() => {
       const token = getToken(); const role = localStorage.getItem('userRole');
       if (!token || role !== 'academic_admin') { navigate('/portal/login'); return; }
       loadAll();
     }, [navigate]);
-
-    useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
     // ─── API ──────────────────────────────────────────────────────────
     const api = useCallback(async (path, opts = {}) => {
@@ -212,25 +174,18 @@ import MessagingPanel from '../components/chat/MessagingPanel';
     }, []);
 
     const loadAll = () => Promise.all([
-      fetchTeachers(), fetchClasses(), fetchStudents(), fetchNews(),
-      fetchGallery(), fetchAnnouncements(), fetchPerformance(),
-      fetchApplicationCounts(), fetchMsgUsers(), fetchUnread(),
+      fetchTeachers(), fetchClasses(), fetchStudents(),
+      fetchAnnouncements(), fetchPerformance(),
     ]).finally(() => setLoading(false));
 
     const fetchTeachers = () => api('/academic-admin/teachers-list').then(d => setTeachers(Array.isArray(d) ? d : [])).catch(() => {});
     const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => {});
     const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => {});
-    const fetchNews = () => api('/academic-admin/news').then(d => setNews(Array.isArray(d) ? d : [])).catch(() => {});
-    const fetchGallery = () => api('/academic-admin/gallery').then(d => setGallery(Array.isArray(d) ? d : [])).catch(() => {});
     const fetchAnnouncements = () => api('/announcements').then(d => setAnnouncements(Array.isArray(d) ? d : [])).catch(() => {});
-    const fetchApplicationCounts = () => api('/academic-admin/applications?limit=1').then(d => d?.counts && setApplicationCounts(d.counts)).catch(() => {});
     const fetchPerformance = () => {
       api('/academic-admin/students-performance').then(d => setStudentPerformance(Array.isArray(d) ? d : [])).catch(() => {});
       api('/academic-admin/class-performance').then(d => setClassPerformance(Array.isArray(d) ? d : [])).catch(() => {});
     };
-    const fetchMsgUsers = () => api('/messages/users').then(d => { const all = Object.values(d.users || d || {}).flat(); setMsgUsers(all); }).catch(() => {});
-    const fetchUnread = () => api('/messages/unread-count').then(d => setUnread(d.count || 0)).catch(() => {});
-    const fetchConversation = (uid) => api(`/messages/conversation/${uid}`).then(d => setMessages(Array.isArray(d.messages) ? d.messages : [])).catch(() => {});
 
     // ─── ACTIONS ──────────────────────────────────────────────────────
     const createTeacher = async () => {
@@ -305,65 +260,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
       Swal.fire('Deleted!', '', 'success'); fetchStudents();
     };
 
-    const postNews = async () => {
-      if (!newsForm.title || !newsForm.summary) { Swal.fire('Missing Fields', 'Title and summary required', 'warning'); return; }
-      setSaving(true);
-      try {
-        const token = getToken();
-        const fd = new FormData();
-        Object.entries(newsForm).forEach(([k, v]) => fd.append(k, v));
-        if (newsImageFile) fd.append('image', newsImageFile);
-        const res = await fetch(`${API_URL}/api/academic-admin/news`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
-        if (!res.ok) throw await res.json();
-        Swal.fire('✅ Published!', 'News posted successfully', 'success');
-        setNewsModal(false); setNewsForm({ title: '', summary: '', content: '', category: 'news', tags: '' }); setNewsImageFile(null);
-        fetchNews();
-      } catch (e) { Swal.fire('Error', e.message || 'Failed', 'error'); }
-      finally { setSaving(false); }
-    };
-
-    const deleteNews = async (item) => {
-      const ok = await Swal.fire({ title: `Delete "${item.title}"?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#e74c3c', confirmButtonText: 'Delete' });
-      if (!ok.isConfirmed) return;
-      await api(`/academic-admin/news/${item._id}`, { method: 'DELETE' });
-      Swal.fire('Deleted!', '', 'success'); fetchNews();
-    };
-
-    const addGalleryImage = async () => {
-      if (!galleryForm.title || !galleryImageFile) { Swal.fire('Missing Fields', 'Title and image required', 'warning'); return; }
-      setSaving(true);
-      try {
-        const token = getToken();
-        const fd = new FormData();
-        Object.entries(galleryForm).forEach(([k, v]) => fd.append(k, v));
-        fd.append('image', galleryImageFile);
-        const res = await fetch(`${API_URL}/api/academic-admin/gallery`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
-        if (!res.ok) throw await res.json();
-        Swal.fire('✅ Added!', 'Image added to gallery', 'success');
-        setGalleryModal(false); setGalleryForm({ title: '', category: 'events', description: '' }); setGalleryImageFile(null);
-        fetchGallery();
-      } catch (e) { Swal.fire('Error', e.message || 'Failed', 'error'); }
-      finally { setSaving(false); }
-    };
-
-    const deleteGallery = async (img) => {
-      const ok = await Swal.fire({ title: `Delete "${img.title}"?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#e74c3c', confirmButtonText: 'Delete' });
-      if (!ok.isConfirmed) return;
-      await api(`/academic-admin/gallery/${img._id}`, { method: 'DELETE' });
-      Swal.fire('Deleted!', '', 'success'); fetchGallery();
-    };
-
-    const sendMessage = async () => {
-      if (!msgText.trim() || !selectedUser) return;
-      try {
-        const res = await api('/messages/send', { method: 'POST', body: JSON.stringify({ recipientId: selectedUser._id, subject: 'Direct Message', content: msgText.trim() }) });
-        setMessages(prev => [...prev, res.message]);
-        setMsgText('');
-        if (socket) socket.emit('sendMessage', { receiverId: selectedUser._id, ...res.message });
-        fetchUnread();
-      } catch {}
-    };
-
     // Seven top-level domains; every feature below is reachable as a sub-item.
     const navGroups = [
       {
@@ -401,22 +297,19 @@ import MessagingPanel from '../components/chat/MessagingPanel';
         id: 'g-quality', label: 'Quality', icon: 'fas fa-clipboard-check',
         items: [
           { id: 'lessonreview', label: 'Lesson Review', icon: 'fas fa-clipboard-check' },
-          { id: 'applications', label: 'Applications', icon: 'fas fa-file-alt', badge: applicationCounts.pending || 0 },
         ]
       },
       {
         id: 'g-comms', label: 'Communication', icon: 'fas fa-comments',
         items: [
           { id: 'announcements', label: 'Announcements', icon: 'fas fa-bullhorn' },
-          { id: 'messages', label: 'Messages', icon: 'fas fa-comments', badge: unread },
         ]
       },
       {
         id: 'g-content', label: 'Content & System', icon: 'fas fa-gears',
         items: [
           { id: 'calendar', label: 'Calendar', icon: 'fas fa-calendar-days' },
-          { id: 'news', label: 'News & Events', icon: 'fas fa-newspaper' },
-          { id: 'gallery', label: 'Gallery', icon: 'fas fa-images' },
+          { id: 'content', label: 'Website content', icon: 'fas fa-newspaper' },
           { id: 'sdms', label: 'SDMS Codes', icon: 'fas fa-id-card' },
           { id: 'profile', label: 'Profile', icon: 'fas fa-user-shield' },
         ]
@@ -425,10 +318,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
 
     // Flat lookup so the top bar can title the screen, not the domain.
     const menuItems = navGroups.flatMap(g => g.items);
-
-    const filteredUsers = msgUsers.filter(u =>
-      u.fullName?.toLowerCase().includes(msgSearch.toLowerCase()) || u.role?.toLowerCase().includes(msgSearch.toLowerCase())
-    );
 
     const sideW = isMobile ? 0 : sidebarOpen ? 260 : 72;
 
@@ -448,8 +337,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
           @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
           .tab-anim{animation:fadeIn .22s ease}
           ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:10px}
-          .sent-bubble{background:#1a3a5c;color:white;border-radius:18px 18px 4px 18px;padding:10px 15px;max-width:70%;align-self:flex-end;font-size:13px}
-          .recv-bubble{background:white;color:#333;border-radius:18px 18px 18px 4px;padding:10px 15px;max-width:70%;align-self:flex-start;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
           @media(max-width:768px){.hide-mobile{display:none!important}.stats-g{grid-template-columns:1fr 1fr!important}}
         `}</style>
 
@@ -497,10 +384,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-              {unread > 0 && <button onClick={() => setActiveTab('messages')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color:'var(--text-faint)', fontSize: 17 }}>
-                <i className="fas fa-bell" />
-                <span style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color:'var(--on-solid)', borderRadius: '50%', fontSize: 9, width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{unread}</span>
-              </button>}
               <Avatar name={userName} size={32} />
               <div className="hide-mobile">
                 <div style={{ fontSize: 12, fontWeight: 600, color:'var(--text-body)' }}>{userName}</div>
@@ -529,23 +412,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
                   <StatCard icon="fas fa-chalkboard-user" label="Teachers" value={teachers.length} sub="Active educators" accent="#27ae60" bg="#e8f5e9" onClick={() => setActiveTab('teachers')} />
                   <StatCard icon="fas fa-school" label="Classes" value={classes.length} sub="Active classes" accent="#3498db" bg="#e3f2fd" onClick={() => setActiveTab('classes')} />
                   <StatCard icon="fas fa-user-graduate" label="Students" value={students.length} sub="Enrolled students" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('students')} />
-                  <StatCard icon="fas fa-newspaper" label="News & Events" value={news.length} sub="Published articles" accent="#f39c12" bg="#fff3e0" onClick={() => setActiveTab('news')} />
-                  <StatCard icon="fas fa-images" label="Gallery" value={gallery.length} sub="Images uploaded" accent="#e74c3c" bg="#fdecea" onClick={() => setActiveTab('gallery')} />
-                  <StatCard icon="fas fa-file-alt" label="Applications" value={applicationCounts.pending || 0} sub="Pending review" accent="#1abc9c" bg="#e0f7fa" onClick={() => setActiveTab('applications')} />
-                </div>
-                {/* recent news */}
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                    <h3 style={{ margin: 0, fontSize: 14, color:'var(--navy)', fontWeight: 600 }}><i className="fas fa-newspaper" style={{ marginRight: 7, color: '#f39c12' }} />Recent News</h3>
-                    <Btn small onClick={() => setNewsModal(true)} icon="fas fa-plus" color="#f39c12">Post News</Btn>
-                  </div>
-                  {news.slice(0, 3).map(n => (
-                    <div key={n._id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom:'1px solid var(--surface-muted)' }}>
-                      <div><div style={{ fontSize: 13, fontWeight: 600 }}>{n.title}</div><div style={{ fontSize: 11, color:'var(--text-faint)', marginTop: 2 }}>{n.category} · {fmt(n.date)}</div></div>
-                      <Btn small danger icon="fas fa-trash" onClick={() => deleteNews(n)} />
-                    </div>
-                  ))}
-                  {news.length === 0 && <p style={{ textAlign: 'center', color:'var(--text-faint-2)', fontSize: 13, padding: 20 }}>No news published yet</p>}
                 </div>
               </div>
             )}
@@ -565,7 +431,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
                         <TD><Badge text={t.subject || 'General'} color="#9b59b6" bg="#f3e5f5" /></TD>
                         <TD style={{ fontSize: 12 }}>{t.phone || '—'}</TD>
                         <TD><div style={{ display: 'flex', gap: 6 }}>
-                          <Btn small icon="fas fa-comment" color="#3498db" onClick={() => { setSelectedUser(t); setActiveTab('messages'); fetchConversation(t._id); }}>Message</Btn>
                           <Btn small danger icon="fas fa-trash" onClick={() => deleteTeacher(t)} />
                         </div></TD></>
                     ))}
@@ -628,71 +493,8 @@ import MessagingPanel from '../components/chat/MessagingPanel';
               </div>
             )}
 
-            {/* ══ NEWS ══ */}
-            {activeTab === 'news' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                  <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>News & Events</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{news.length} articles published</p></div>
-                  <Btn onClick={() => setNewsModal(true)} icon="fas fa-plus" color="#1a3a5c">Post News</Btn>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {news.length === 0 && <div style={{ textAlign: 'center', padding: 50, background:'var(--surface-card)', borderRadius: 14, color:'var(--text-faint-2)' }}><i className="fas fa-newspaper" style={{ fontSize: 36, marginBottom: 10, display: 'block', opacity: .3 }} />No news published yet</div>}
-                  {news.map(n => (
-                    <div key={n._id} style={{ background:'var(--surface-card)', borderRadius: 13, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'flex-start', boxShadow: '0 2px 8px rgba(0,0,0,.05)' }}>
-                      {n.image && <img src={n.image} alt={n.title} style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                          <h3 style={{ margin: 0, fontSize: 14, color:'var(--navy)' }}>{n.title}</h3>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <Badge text={n.category} color="#f39c12" bg="#fff3e0" />
-                            <span style={{ fontSize: 11, color:'var(--text-faint)' }}>{fmt(n.date)}</span>
-                            <Btn small danger icon="fas fa-trash" onClick={() => deleteNews(n)} />
-                          </div>
-                        </div>
-                        <p style={{ margin: '6px 0 0', fontSize: 12, color:'var(--text-secondary)', lineHeight: 1.6 }}>{n.summary}</p>
-                        <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color:'var(--text-faint)' }}>
-                          <span><i className="fas fa-eye" style={{ marginRight: 4 }} />{n.views || 0} views</span>
-                          <span><i className="fas fa-user" style={{ marginRight: 4 }} />{n.author}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ══ GALLERY ══ */}
-            {activeTab === 'gallery' && (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                  <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Photo Gallery</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{gallery.length} images</p></div>
-                  <Btn onClick={() => setGalleryModal(true)} icon="fas fa-plus" color="#1a3a5c">Add Image</Btn>
-                </div>
-                {gallery.length === 0 && <div style={{ textAlign: 'center', padding: 50, background:'var(--surface-card)', borderRadius: 14, color:'var(--text-faint-2)' }}><i className="fas fa-images" style={{ fontSize: 36, marginBottom: 10, display: 'block', opacity: .3 }} />No gallery images yet</div>}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14 }}>
-                  {gallery.map(img => (
-                    <div key={img._id} style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', background:'var(--surface-card)', boxShadow: '0 2px 8px rgba(0,0,0,.08)' }}>
-                      <img src={img.image} alt={img.title} style={{ width: '100%', height: 150, objectFit: 'cover' }} />
-                      <div style={{ padding: '10px 12px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color:'var(--navy)' }}>{img.title}</div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                          <Badge text={img.category} color="#3498db" bg="#e3f2fd" size={10} />
-                          <button onClick={() => deleteGallery(img)} style={{ background:'var(--tint-danger)', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', color: '#e74c3c', fontSize: 11 }}><i className="fas fa-trash" /></button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-{/* ══ APPLICATIONS ══ */}
-            {activeTab === 'applications' && (
-              <div>
-                <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Admission Applications</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>Review, score and decide on incoming applications.</p></div>
-                <ApplicationsPanel onCountChange={setApplicationCounts} />
-              </div>
-            )}
+            {/* ══ SHARED WEBSITE CONTENT ══ */}
+            {activeTab === 'content' && <WebsiteContentPanel role="academic_admin" />}
 
             {/* ══ PERFORMANCE ══ */}
             {activeTab === 'performance' && (
@@ -764,11 +566,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
                   })}
                 </div>
               </div>
-            )}
-
-            {/* ══ MESSAGES ══ */}
-            {activeTab === 'messages' && (
-              <MessagingPanel recipient={selectedUser || undefined} height="calc(100vh - 150px)" />
             )}
 
             {/* ══ PROFILE ══ */}
@@ -858,39 +655,6 @@ import MessagingPanel from '../components/chat/MessagingPanel';
           </div>
         </Modal>
 
-        <Modal open={newsModal} onClose={() => setNewsModal(false)} title="Post News / Event" width={560}>
-          <Field label="Title" required><Inp value={newsForm.title} placeholder="News title" onChange={e => setNewsForm(p => ({ ...p, title: e.target.value }))} /></Field>
-          <Field label="Summary" required><Txt value={newsForm.summary} placeholder="Short summary…" rows={3} onChange={e => setNewsForm(p => ({ ...p, summary: e.target.value }))} /></Field>
-          <Field label="Full Content"><Txt value={newsForm.content} placeholder="Full content (optional)" rows={4} onChange={e => setNewsForm(p => ({ ...p, content: e.target.value }))} /></Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="Category">
-              <Sel value={newsForm.category} onChange={e => setNewsForm(p => ({ ...p, category: e.target.value }))}>
-                <option value="news">📰 News</option><option value="event">🎉 Event</option><option value="announcement">📢 Announcement</option><option value="achievement">🏆 Achievement</option>
-              </Sel>
-            </Field>
-            <Field label="Tags"><Inp value={newsForm.tags} placeholder="tag1, tag2" onChange={e => setNewsForm(p => ({ ...p, tags: e.target.value }))} /></Field>
-          </div>
-          <Field label="Image (optional)"><input type="file" accept="image/*" onChange={e => setNewsImageFile(e.target.files[0])} style={{ fontSize: 13, padding: '8px 0' }} /></Field>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <Btn onClick={() => setNewsModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-            <Btn onClick={postNews} icon="fas fa-paper-plane" color="#1a3a5c" disabled={saving}>{saving ? 'Publishing…' : 'Publish'}</Btn>
-          </div>
-        </Modal>
-
-        <Modal open={galleryModal} onClose={() => setGalleryModal(false)} title="Add Gallery Image">
-          <Field label="Title" required><Inp value={galleryForm.title} placeholder="Image title" onChange={e => setGalleryForm(p => ({ ...p, title: e.target.value }))} /></Field>
-          <Field label="Category">
-            <Sel value={galleryForm.category} onChange={e => setGalleryForm(p => ({ ...p, category: e.target.value }))}>
-              <option value="events">🎪 Events</option><option value="academic">📚 Academic</option><option value="sports">⚽ Sports</option><option value="cultural">🎭 Cultural</option>
-            </Sel>
-          </Field>
-          <Field label="Description"><Txt value={galleryForm.description} placeholder="Optional description" rows={3} onChange={e => setGalleryForm(p => ({ ...p, description: e.target.value }))} /></Field>
-          <Field label="Image" required><input type="file" accept="image/*" onChange={e => setGalleryImageFile(e.target.files[0])} style={{ fontSize: 13, padding: '8px 0' }} /></Field>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <Btn onClick={() => setGalleryModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-            <Btn onClick={addGalleryImage} icon="fas fa-image" color="#1a3a5c" disabled={saving}>{saving ? 'Uploading…' : 'Add Image'}</Btn>
-          </div>
-        </Modal>
       </div>
     );
   };

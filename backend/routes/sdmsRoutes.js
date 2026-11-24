@@ -10,7 +10,7 @@ const { issueCode } = require('../utils/sdms');
 
 const router = express.Router();
 
-const manage = requireRole('academic_admin', 'super_admin');
+const manage = requireRole('academic_admin', 'headmaster');
 
 // Issues or reissues a code. Reissuing also resets the linked account's
 // password, so a lost slip cannot be used by whoever finds it.

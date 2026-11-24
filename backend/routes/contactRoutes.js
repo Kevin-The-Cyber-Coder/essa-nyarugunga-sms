@@ -34,7 +34,7 @@ router.post('/contact/submit', publicFormLimiter,
     }
   });
 
-router.get('/admin/contacts', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.get('/admin/contacts', authMiddleware, requireRole('headmaster'), async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
   const total = await Contact.countDocuments();
   const contacts = await Contact.find().sort({ createdAt: -1 }).skip(skip).limit(limit || undefined);

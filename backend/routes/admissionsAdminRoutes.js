@@ -1,16 +1,36 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const AdmissionApplication = require('../models/AdmissionApplication');
+const Student = require('../models/Student');
+const User = require('../models/User');
+const Class = require('../models/Class');
+const ParentProfile = require('../models/ParentProfile');
 const { sendAdmissionDecisionEmail } = require('../utils/emailService');
+const { issueCode } = require('../utils/sdms');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
+const { ROLES } = require('../config/roles');
 
 const router = express.Router();
 const { APPLICATION_STATUSES, RUBRIC_CRITERIA } = AdmissionApplication;
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const ADMIN_ONLY = [authMiddleware, requireRole('academic_admin', 'super_admin')];
+// Applications are handled by the Headmaster (final decision) and the Admin
+// Assistant (review and registration). Academic staff have no part in this
+// workflow, which is why their role is absent here.
+const ADMIN_ONLY = [authMiddleware, requireRole(ROLES.HEADMASTER, ROLES.ADMIN_ASSISTANT)];
+
+const canSetStatus = (role, status, currentStatus) => {
+  // The Admin Assistant prepares an application; the Headmaster alone makes
+  // the final call; registration is a separate endpoint that creates the
+  // student account, so it can never be reached by a plain status write.
+  if (status === 'under_review') return role === ROLES.ADMIN_ASSISTANT && currentStatus === 'submitted';
+  if (status === 'approved' || status === 'rejected') return role === ROLES.HEADMASTER && currentStatus === 'under_review';
+  return false;
+};
 
 // Fields the table and drawer need that live on the referenced User.
 // The User schema names its display field fullName, not name.
@@ -186,7 +206,6 @@ router.put('/applications/bulk-status', ...ADMIN_ONLY, async (req, res) => {
     const status = readStatus(req.body.status);
     if (!ids.length) return res.status(400).json({ message: 'Select at least one application.' });
     if (!status) return res.status(400).json({ message: 'Unknown status.' });
-
     const note = String(req.body.reviewNotes || '').trim();
     const updated = [];
     const skipped = [];
@@ -200,6 +219,10 @@ router.put('/applications/bulk-status', ...ADMIN_ONLY, async (req, res) => {
         continue;
       }
       if (current.status === status) {
+        skipped.push(id);
+        continue;
+      }
+      if (!canSetStatus(req.userRole, status, current.status)) {
         skipped.push(id);
         continue;
       }
@@ -238,7 +261,7 @@ router.put('/applications/bulk-status', ...ADMIN_ONLY, async (req, res) => {
 });
 
 // ─── save rubric scores ───────────────────────────────────────────────────────
-router.put('/applications/:id/score', ...ADMIN_ONLY, async (req, res) => {
+router.put('/applications/:id/score', authMiddleware, requireRole(ROLES.ADMIN_ASSISTANT), async (req, res) => {
   try {
     const application = await AdmissionApplication.findById(req.params.id);
     if (!application) return res.status(404).json({ message: 'Application not found.' });
@@ -292,6 +315,9 @@ router.put('/applications/:id/status', ...ADMIN_ONLY, async (req, res) => {
 
     const application = await AdmissionApplication.findById(req.params.id);
     if (!application) return res.status(404).json({ message: 'Application not found.' });
+    if (!canSetStatus(req.userRole, status, application.status)) {
+      return res.status(403).json({ message: 'You cannot make this decision at this stage' });
+    }
 
     const from = application.status;
     const note = String(req.body.reviewNotes || '').trim();
@@ -326,6 +352,67 @@ router.put('/applications/:id/status', ...ADMIN_ONLY, async (req, res) => {
 
     await application.populate(POPULATE);
     res.json({ application, notified });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ─── registration after Headmaster approval ──────────────────────────────────
+// Only the Admin Assistant turns an approved application into a student
+// account. The Headmaster's approval is a hard prerequisite - staff cannot
+// skip it by calling this endpoint directly.
+router.post('/applications/:id/register', authMiddleware, requireRole(ROLES.ADMIN_ASSISTANT), async (req, res) => {
+  try {
+    const application = await AdmissionApplication.findById(req.params.id);
+    if (!application) return res.status(404).json({ message: 'Application not found.' });
+    if (application.status !== 'approved') {
+      return res.status(409).json({ message: 'Only approved applications can be registered.' });
+    }
+    if (await Student.findOne({ email: application.email })) {
+      return res.status(409).json({ message: 'A student with this email already exists.' });
+    }
+
+    const count = await Student.countDocuments();
+    const studentId = `STU${new Date().getFullYear()}${String(count + 1).padStart(4, '0')}`;
+    const classId = req.body.classId || null;
+    if (classId && !(await Class.findById(classId))) {
+      return res.status(400).json({ message: 'The selected class does not exist.' });
+    }
+
+    const user = await User.create({
+      fullName: application.fullName,
+      email: application.email,
+      phone: application.parentPhone,
+      password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10),
+      role: ROLES.STUDENT,
+      mustChangePassword: true,
+      createdBy: req.userId
+    });
+
+    const student = await Student.create({
+      userId: user._id,
+      studentId,
+      fullName: application.fullName,
+      email: application.email,
+      classId,
+      parentName: application.parentName,
+      parentPhone: application.parentPhone
+    });
+
+    if (classId) await Class.findByIdAndUpdate(classId, { $addToSet: { students: student._id } });
+    const sdmsCode = await issueCode(student);
+
+    const from = application.status;
+    application.status = 'registered';
+    application.reviewedBy = req.userId;
+    application.reviewedAt = new Date();
+    application.activity.push({
+      action: 'registered', from, to: 'registered',
+      detail: `Student ${studentId} created`, actor: req.userId, at: new Date()
+    });
+    await application.save();
+
+    res.json({ success: true, student, sdmsCode, applicationNumber: application.applicationNumber });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -4,18 +4,12 @@ import Swal from 'sweetalert2';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 // ── Images ──
 import heroBg from '../assets/hero-bg.jpg';
 import campusImage from '../assets/campus.png';
 import studentsImage from '../assets/students.png';
-import classroomImg from '../assets/classroom.png';
-import libraryImg from '../assets/library.png';
-import footballImg from '../assets/football.png';
-import basketballImg from '../assets/basketball.png';
-import scienceLabImg from '../assets/science-lab.png';
-import musicImg from '../assets/music.png';
-import artImg from '../assets/art.png';
-import graduationImg from '../assets/graduation.png';
 import debateClubImg from '../assets/debate-club.png';
 import musicClubImg from '../assets/music-club.png';
 import sportsClubImg from '../assets/sports-club.png';
@@ -65,19 +59,30 @@ const HomePage = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [counterValues, setCounterValues] = useState({ students: 0, teachers: 0, years: 0 });
   const [activeGalleryFilter, setActiveGalleryFilter] = useState('all');
+  const [galleryItems, setGalleryItems] = useState([]);
   const sliderRef = useRef(null);
 
   // ═══════════ Data ═══════════
-  const galleryItems = [
-    { id: 1, category: 'academic', img: classroomImg, title: 'Classroom Session', subtitle: 'Academic Excellence' },
-    { id: 2, category: 'sports', img: footballImg, title: 'Football Match', subtitle: 'Sports Day' },
-    { id: 3, category: 'cultural', img: musicImg, title: 'Music Concert', subtitle: 'Cultural Event' },
-    { id: 4, category: 'academic', img: scienceLabImg, title: 'Science Lab', subtitle: 'Lab Session' },
-    { id: 5, category: 'sports', img: basketballImg, title: 'Basketball', subtitle: 'Basketball Tournament' },
-    { id: 6, category: 'cultural', img: artImg, title: 'Art Exhibition', subtitle: 'Student Art' },
-    { id: 7, category: 'academic', img: libraryImg, title: 'Library', subtitle: 'Reading Session' },
-    { id: 8, category: 'events', img: graduationImg, title: 'Graduation', subtitle: 'Graduation Ceremony' },
-  ];
+  // The gallery preview is CMS-driven like the full Gallery page: only content
+  // an authorized dashboard published appears on the public site.
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_URL}/api/gallery/public?limit=8`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active) return;
+        const items = Array.isArray(data?.data) ? data.data : [];
+        setGalleryItems(items.map((item) => ({
+          id: item._id,
+          category: item.category,
+          img: item.image,
+          title: item.title,
+          subtitle: item.description || item.title
+        })));
+      })
+      .catch(() => { if (active) setGalleryItems([]); });
+    return () => { active = false; };
+  }, []);
 
   const programs = [
     { id: 1, name: 'Software Development', icon: 'fas fa-code', img: sodEssa,
@@ -434,9 +439,9 @@ const HomePage = () => {
             {[
               { id: 'all', label: 'All' },
               { id: 'academic', label: 'Academic' },
-              { id: 'sports', label: 'Sports' },
-              { id: 'cultural', label: 'Cultural' },
-              { id: 'events', label: 'Events' },
+              { id: 'discipline', label: 'Discipline' },
+              { id: 'financial', label: 'Financial' },
+              { id: 'general', label: 'General' },
             ].map((f) => (
               <button
                 key={f.id}
@@ -463,6 +468,11 @@ const HomePage = () => {
                 </div>
               </button>
             ))}
+            {filteredGallery.length === 0 && (
+              <p style={{ gridColumn: '1 / -1', textAlign: 'center', color: 'var(--text-faint, #64748b)', fontSize: 14 }}>
+                No published photos in this category yet.
+              </p>
+            )}
           </div>
           <div className="gallery-btn-container">
             <Link to="/gallery" className="btn btn-outline">

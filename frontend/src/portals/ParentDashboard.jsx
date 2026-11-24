@@ -1,15 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
-import io from 'socket.io-client';
-import ChatModal from '../components/ChatModal';
-import GroupedNav from '../components/GroupedNav';
+import Swal from 'sweetalert2';import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
 
-const API_URL = import.meta.env.VITE_API_URL;
-const SOCKET_URL = API_URL;
-const getToken = () => localStorage.getItem('portalToken');
+const API_URL = import.meta.env.VITE_API_URL;const getToken = () => localStorage.getItem('portalToken');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -18,7 +13,7 @@ const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour: '2-di
 
 const roleBadge = (role) => {
   const map = {
-    super_admin: { label: 'Super Admin', color: '#ffc107', bg:'var(--tint-amber)' },
+    headmaster: { label: 'Headmaster', color: '#ffc107', bg:'var(--tint-amber)' },
     academic_admin: { label: 'Academic Admin', color: '#27ae60', bg:'var(--tint-success)' },
     discipline_admin: { label: 'Discipline Admin', color: '#e74c3c', bg:'var(--tint-danger)' },
     accounts_admin: { label: 'Accounts Admin', color: '#3498db', bg:'var(--tint-primary)' },
@@ -122,8 +117,6 @@ const TD = ({ children, style }) => <td style={{ padding: '10px 14px', fontSize:
 // ═══════════════════════════════════════════════════════════════════
 const ParentDashboard = () => {
   const navigate = useNavigate();
-  const msgEndRef = useRef(null);
-
   // layout
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -147,12 +140,6 @@ const ParentDashboard = () => {
   const [disciplineRecords, setDisciplineRecords] = useState([]);
   const [documents, setDocuments] = useState([]);
 
-  // chat
-  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
-  const [selectedChatUser, setSelectedChatUser] = useState(null);
-  const [unread, setUnread] = useState(0);
-  const [socket, setSocket] = useState(null);
-
   const userName = localStorage.getItem('userName') || 'Parent';
   const userId = localStorage.getItem('userId');
 
@@ -171,26 +158,12 @@ const ParentDashboard = () => {
     check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check);
   }, []);
 
-  // ─── socket ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const token = getToken(); if (!token) return;
-    const sock = io(SOCKET_URL, { auth: { token } });
-    setSocket(sock);
-    if (userId) sock.emit('join', userId);
-    sock.on('new_message', () => fetchUnread());
-    sock.on('newMessage', () => fetchUnread());
-    return () => sock.disconnect();
-  }, [userId]);
-
   // ─── auth + initial load ────────────────────────────────────────────────
   useEffect(() => {
     const token = getToken(); const role = localStorage.getItem('userRole');
     if (!token || role !== 'parent') { navigate('/portal/login'); return; }
     fetchChildren();
-    fetchUnread();
   }, [navigate]);
-
-  useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, []);
 
   // ─── fetchers ───────────────────────────────────────────────────────────
   const fetchChildren = async () => {
@@ -249,28 +222,10 @@ const ParentDashboard = () => {
     }
   };
 
-  const fetchUnread = async () => {
-    try {
-      const data = await api('/messages/unread-count');
-      setUnread(data?.count || data?.unread || 0);
-    } catch { setUnread(0); }
-  };
-
   const handleChildChange = (child) => {
     setSelectedChild(child);
     fetchChildData(child._id);
     setShowChildSelector(false);
-  };
-
-  const handleOpenChat = (user = null) => {
-    if (user) setSelectedChatUser(user);
-    setIsChatModalOpen(true);
-  };
-
-  const handleCloseChat = () => {
-    setIsChatModalOpen(false);
-    setSelectedChatUser(null);
-    fetchUnread();
   };
 
   const handleDownloadDocument = (doc) => {
@@ -387,9 +342,7 @@ const ParentDashboard = () => {
     },
     {
       id: 'g-comms', label: 'Communication', icon: 'fas fa-comments',
-      items: [
-        { id: 'messages', label: 'Messages', icon: 'fas fa-comments', badge: unread },
-        { id: 'settings', label: 'Settings', icon: 'fas fa-cog' },
+      items: [        { id: 'settings', label: 'Settings', icon: 'fas fa-cog' },
       ]
     },
   ];
@@ -511,10 +464,6 @@ const ParentDashboard = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-            {unread > 0 && <button onClick={() => setActiveTab('messages')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color:'var(--text-faint)', fontSize: 17 }}>
-              <i className="fas fa-bell" />
-              <span style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color:'var(--on-solid)', borderRadius: '50%', fontSize: 9, width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{unread}</span>
-            </button>}
             <Avatar name={userName} size={32} />
             <div className="hide-mobile">
               <div style={{ fontSize: 12, fontWeight: 600, color:'var(--text-body)' }}>{userName}</div>
@@ -568,7 +517,6 @@ const ParentDashboard = () => {
                 <Btn onClick={() => setActiveTab('attendance')} icon="fas fa-calendar-check" color="#f39c12">Attendance</Btn>
                 <Btn onClick={() => setActiveTab('fees')} icon="fas fa-credit-card" color="#27ae60">Pay Fees</Btn>
                 <Btn onClick={() => setActiveTab('homework')} icon="fas fa-tasks" color="#1abc9c">Homework</Btn>
-                <Btn onClick={() => handleOpenChat({ name: 'Teacher', role: 'teacher', id: 'teacher' })} icon="fas fa-comment" color="#9b59b6">Contact Teacher</Btn>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 18 }}>
@@ -834,16 +782,6 @@ const ParentDashboard = () => {
             </div>
           )}
 
-          {/* ══ MESSAGES ══ */}
-          {activeTab === 'messages' && (
-            <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 30, textAlign: 'center', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-              <i className="fas fa-comments" style={{ fontSize: 48, color:'var(--navy)', opacity: .3, marginBottom: 16, display: 'block' }} />
-              <h3 style={{ margin: '0 0 8px', color:'var(--navy)' }}>Message Center</h3>
-              <p style={{ margin: '0 0 20px', color:'var(--text-faint)', fontSize: 13 }}>Chat with teachers and school staff about your child's progress.</p>
-              <Btn icon="fas fa-comments" color="#1a3a5c" onClick={() => handleOpenChat()}>Open Messages</Btn>
-            </div>
-          )}
-
           {/* ══ SETTINGS ══ */}
           {activeTab === 'settings' && (
             <div style={{ maxWidth: 620, margin: '0 auto' }}>
@@ -882,13 +820,6 @@ const ParentDashboard = () => {
           )}
         </div>
       </main>
-
-      <ChatModal
-        isOpen={isChatModalOpen}
-        onClose={handleCloseChat}
-        recipient={selectedChatUser}
-        onMessageSent={fetchUnread}
-      />
     </div>
   );
 };

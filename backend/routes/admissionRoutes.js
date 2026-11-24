@@ -2,10 +2,46 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 
 const AdmissionApplication = require('../models/AdmissionApplication');
-const { sendAdmissionConfirmationEmail } = require('../utils/emailService');
+const Student = require('../models/Student');
+const User = require('../models/User');
+const { sendAdmissionConfirmationEmail, sendNotificationEmail } = require('../utils/emailService');
 const { publicFormLimiter } = require('../config/rateLimit');
+const { notify } = require('../utils/notifier');
+const { ROLES } = require('../config/roles');
 
 const router = express.Router();
+
+// An email or phone belonging to an existing application/student, or a
+// verified national ID, is enough to reject a second application.
+const findDuplicate = async ({ email, phone, nationalId }) => {
+  const or = [];
+  if (email) or.push({ email: email.toLowerCase() });
+  if (phone) or.push({ phone });
+  if (nationalId) or.push({ nationalId });
+  if (!or.length) return null;
+
+  const filter = { $or: or };
+  const existing = await AdmissionApplication.findOne(filter).select('applicationNumber email phone nationalId').lean();
+  if (existing) return { source: 'application', value: existing.applicationNumber };
+
+  if (email || phone) {
+    const studentOr = [];
+    if (email) studentOr.push({ email: email.toLowerCase() });
+    if (phone) studentOr.push({ phone });
+    const student = await Student.findOne({ $or: studentOr }).select('_id').lean();
+    if (student) return { source: 'student', value: 'enrolled student record' };
+  }
+  return null;
+};
+
+const alertHeadmasters = async (application) => {
+  const headmasters = await User.find({ role: ROLES.HEADMASTER, isActive: true }).select('_id fullName email').lean();
+  await Promise.all(headmasters.map(async (head) => {
+    const details = { title: 'New admission application', body: `${application.fullName} (${application.applicationNumber})`, link: '/portal/headmaster' };
+    await notify({ userId: head._id, type: 'admission', ...details });
+    if (head.email) await sendNotificationEmail(head, details);
+  }));
+};
 
 router.post('/admissions/submit', publicFormLimiter,
   body('fullName').trim().notEmpty().withMessage('Full name is required'),
@@ -23,6 +59,16 @@ router.post('/admissions/submit', publicFormLimiter,
     if (!errors.isEmpty()) return res.status(400).json({ success: false, message: errors.array()[0].msg });
     try {
       const data = req.body;
+      const duplicate = await findDuplicate({
+        email: data.email, phone: data.phone, nationalId: data.nationalId
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          message: `An application or student record already exists for this ${duplicate.source === 'application' ? 'application' : 'student'} (${duplicate.value}).`
+        });
+      }
+
       const application = await AdmissionApplication.create({
         fullName: data.fullName, dateOfBirth: new Date(data.dateOfBirth),
         nationality: data.nationality || 'Rwandan', nationalId: data.nationalId || '',
@@ -34,30 +80,34 @@ router.post('/admissions/submit', publicFormLimiter,
         applyScholarship: data.applyScholarship || false,
         activity: [{ action: 'submitted', detail: 'Application received', at: new Date() }]
       });
-    sendAdmissionConfirmationEmail(application).catch(console.error);
-    res.json({ success: true, message: 'Application submitted!', applicationNumber: application.applicationNumber });
-  } catch (error) {
-    // 11000 is the duplicate key on applicationNumber. Two people applying at
-    // once can read the same "next" number, so try once more rather than showing
-    // the applicant a server error for something that is not their fault.
-    if (error.code === 11000) {
-      try {
-        const application = await AdmissionApplication.create({
-          ...req.body,
-          email: req.body.email.toLowerCase(),
-          dateOfBirth: new Date(req.body.dateOfBirth),
-          lastAverage: parseFloat(req.body.lastAverage),
-          activity: [{ action: 'submitted', detail: 'Application received', at: new Date() }]
-        });
-        sendAdmissionConfirmationEmail(application).catch(console.error);
-        return res.json({ success: true, message: 'Application submitted!', applicationNumber: application.applicationNumber });
-      } catch (retryError) {
-        return res.status(500).json({ success: false, message: retryError.message });
+
+      sendAdmissionConfirmationEmail(application).catch(console.error);
+      alertHeadmasters(application).catch((error) => console.error('Headmaster alert failed:', error.message));
+      res.json({ success: true, message: 'Application submitted!', applicationNumber: application.applicationNumber });
+    } catch (error) {
+      // 11000 is the duplicate key on applicationNumber. Two people applying at
+      // once can read the same "next" number, so try once more rather than showing
+      // the applicant a server error for something that is not their fault.
+      if (error.code === 11000) {
+        try {
+          const application = await AdmissionApplication.create({
+            ...req.body,
+            email: req.body.email.toLowerCase(),
+            dateOfBirth: new Date(req.body.dateOfBirth),
+            lastAverage: parseFloat(req.body.lastAverage),
+            activity: [{ action: 'submitted', detail: 'Application received', at: new Date() }]
+          });
+          sendAdmissionConfirmationEmail(application).catch(console.error);
+          alertHeadmasters(application).catch((e) => console.error('Headmaster alert failed:', e.message));
+          return res.json({ success: true, message: 'Application submitted!', applicationNumber: application.applicationNumber });
+        } catch (retryError) {
+          return res.status(500).json({ success: false, message: retryError.message });
+        }
       }
+      res.status(500).json({ success: false, message: error.message });
     }
-    res.status(500).json({ success: false, message: error.message });
   }
-});
+);
 
 // Admin-side listing, decisions, scoring and printing live in
 // admissionsAdminRoutes.js, which is mounted ahead of this file.

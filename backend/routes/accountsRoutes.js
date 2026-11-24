@@ -2,7 +2,6 @@ const express = require('express');
 
 const FeeStructure = require('../models/FeeStructure');
 const FeePayment = require('../models/FeePayment');
-const Salary = require('../models/Salary');
 const Budget = require('../models/Budget');
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
@@ -33,12 +32,12 @@ const withClassName = (inv) => {
 };
 
 // ==================== FEES ====================
-router.get('/accounts/fee-structures', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/fee-structures', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const feeStructures = await FeeStructure.find().populate('classId', 'grade className').sort({ createdAt: -1 });
   res.json(feeStructures);
 });
 
-router.post('/accounts/fee-structures', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.post('/accounts/fee-structures', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const feeStructure = await FeeStructure.create(req.body);
     res.json({ success: true, feeStructure });
@@ -47,17 +46,17 @@ router.post('/accounts/fee-structures', authMiddleware, requireRole('accounts_ad
   }
 });
 
-router.delete('/accounts/fee-structures/:id', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.delete('/accounts/fee-structures/:id', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   await FeeStructure.findByIdAndDelete(req.params.id);
   res.json({ success: true });
 });
 
-router.get('/accounts/payments', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/payments', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const payments = await FeePayment.find().populate('studentId', 'fullName studentId').sort({ paymentDate: -1 });
   res.json(payments);
 });
 
-router.post('/accounts/payments', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.post('/accounts/payments', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const { studentId, feeType, amount, paymentMethod, reference, remarks, invoiceId } = req.body;
     if (!studentId || !amount) return res.status(400).json({ message: 'studentId and amount are required' });
@@ -102,7 +101,7 @@ router.post('/accounts/payments', authMiddleware, requireRole('accounts_admin', 
 });
 
 // ==================== INVOICES ====================
-router.get('/accounts/invoices', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/invoices', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const { term, year, status } = req.query;
   const filter = {};
   if (term) filter.term = term;
@@ -114,7 +113,7 @@ router.get('/accounts/invoices', authMiddleware, requireRole('accounts_admin', '
   res.json(invoices.map(withClassName));
 });
 
-router.post('/accounts/invoices/generate', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.post('/accounts/invoices/generate', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const { term, year, classId } = req.body;
     if (!term || !year) return res.status(400).json({ message: 'term and year are required' });
@@ -149,7 +148,7 @@ router.post('/accounts/invoices/generate', authMiddleware, requireRole('accounts
   }
 });
 
-router.get('/accounts/invoices/:id', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/invoices/:id', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const invoice = await Invoice.findById(req.params.id)
     .populate({ path: 'studentId', select: 'fullName studentId classId parentName parentPhone', populate: { path: 'classId', select: 'grade className' } });
   if (!invoice) return res.status(404).json({ message: 'Invoice not found' });
@@ -157,7 +156,7 @@ router.get('/accounts/invoices/:id', authMiddleware, requireRole('accounts_admin
   res.json({ success: true, invoice: withClassName(invoice), payments });
 });
 
-router.put('/accounts/invoices/:id/status', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.put('/accounts/invoices/:id/status', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const { status } = req.body;
     if (!['draft', 'issued', 'partial', 'paid', 'overdue', 'canceled'].includes(status)) return res.status(400).json({ message: 'Invalid status' });
@@ -174,7 +173,7 @@ router.put('/accounts/invoices/:id/status', authMiddleware, requireRole('account
 });
 
 // ==================== RECEIPTS ====================
-router.get('/accounts/receipts/:receiptNo', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/receipts/:receiptNo', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const payment = await FeePayment.findOne({ receiptNo: req.params.receiptNo })
     .populate({ path: 'studentId', select: 'fullName studentId classId parentName parentPhone', populate: { path: 'classId', select: 'grade className' } })
     .populate({ path: 'receivedBy', select: 'fullName' });
@@ -184,7 +183,7 @@ router.get('/accounts/receipts/:receiptNo', authMiddleware, requireRole('account
 });
 
 // ==================== FEE ANALYTICS ====================
-router.get('/accounts/fee-analytics', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/fee-analytics', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const year = Number(req.query.year) || new Date().getFullYear();
     const invoices = await Invoice.find({ year })
@@ -272,42 +271,14 @@ router.get('/accounts/fee-analytics', authMiddleware, requireRole('accounts_admi
   }
 });
 
-// ==================== SALARIES ====================
-router.get('/accounts/salaries', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
-  const salaries = await Salary.find().sort({ createdAt: -1 });
-  res.json(salaries);
-});
-
-router.post('/accounts/salaries', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
-  try {
-    const salary = await Salary.create(req.body);
-    res.json({ success: true, salary });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-router.put('/accounts/salaries/:id/approve', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
-  try {
-    const salary = await Salary.findByIdAndUpdate(
-      req.params.id,
-      { status: 'approved', approvedBy: req.userId, approvedAt: new Date() },
-      { new: true }
-    );
-    res.json({ success: true, salary });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // ==================== BUDGET / INCOME / EXPENSES ====================
-router.get('/accounts/budget', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/budget', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   let budget = await Budget.findOne().sort({ updatedAt: -1 });
   if (!budget) budget = { total: 0 };
   res.json(budget);
 });
 
-router.put('/accounts/budget', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.put('/accounts/budget', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     let budget = await Budget.findOne();
     if (budget) {
@@ -322,12 +293,12 @@ router.put('/accounts/budget', authMiddleware, requireRole('accounts_admin', 'su
   }
 });
 
-router.get('/accounts/income', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/income', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const income = await Income.find().sort({ date: -1 });
   res.json(income);
 });
 
-router.post('/accounts/income', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.post('/accounts/income', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const income = await Income.create({ ...req.body, recordedBy: req.userId, date: req.body.date || new Date() });
     res.json({ success: true, income });
@@ -336,12 +307,12 @@ router.post('/accounts/income', authMiddleware, requireRole('accounts_admin', 's
   }
 });
 
-router.get('/accounts/expenses', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/expenses', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   const expenses = await Expense.find().sort({ date: -1 });
   res.json(expenses);
 });
 
-router.post('/accounts/expenses', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.post('/accounts/expenses', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
     const expense = await Expense.create({ ...req.body, recordedBy: req.userId, date: req.body.date || new Date() });
     res.json({ success: true, expense });
@@ -350,17 +321,16 @@ router.post('/accounts/expenses', authMiddleware, requireRole('accounts_admin', 
   }
 });
 
-router.get('/accounts/financial-summary', authMiddleware, requireRole('accounts_admin', 'super_admin'), async (req, res) => {
+router.get('/accounts/financial-summary', authMiddleware, requireRole('accounts_admin', 'headmaster'), async (req, res) => {
   try {
-    const [incomeAgg, expenseAgg, pendingSalaries, completedPayments] = await Promise.all([
+    const [incomeAgg, expenseAgg, completedPayments] = await Promise.all([
       Income.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]),
       Expense.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]),
-      Salary.countDocuments({ status: 'pending' }),
       FeePayment.countDocuments({ status: 'completed' })
     ]);
     const totalIncome   = incomeAgg[0]?.total || 0;
     const totalExpenses = expenseAgg[0]?.total || 0;
-    res.json({ success: true, totalIncome, totalExpenses, netBalance: totalIncome - totalExpenses, pendingSalaries, completedPayments });
+    res.json({ success: true, totalIncome, totalExpenses, netBalance: totalIncome - totalExpenses, completedPayments });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -183,3 +183,64 @@
 .nx-input:focus {
   border-color: var(--primary, #2563eb);
 }
+
+/* Shared controls for the notification centre and preferences. */
+.nx-btn {
+  border: 1px solid var(--border-strong, #c3cad2);
+  background: var(--surface, #fff);
+  color: var(--text, #1f2933);
+  padding: 8px 16px;
+  border-radius: var(--radius, 10px);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nx-btn:hover {
+  border-color: var(--primary, #2563eb);
+  color: var(--primary, #2563eb);
+}
+
+.nx-btn.primary {
+  background: var(--brand, #16653f);
+  border-color: var(--brand, #16653f);
+  color: var(--brand-contrast, #fff);
+}
+
+.nx-iconbtn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #5f6b76);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.nx-iconbtn:hover {
+  background: var(--surface-sunken, #eef1f4);
+  color: var(--text, #1f2933);
+}
+
+.nx-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted, #5f6b76);
+  text-align: center;
+  padding: 24px;
+}
+
+.nx-empty .nx-bigicon {
+  font-size: 40px;
+  opacity: 0.4;
+}

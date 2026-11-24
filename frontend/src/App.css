@@ -6,6 +6,11 @@
   box-sizing: border-box;
 }
 
+/* Fluid media by default. Fixed-size avatars use inline styles and keep theirs. */
+img {
+  max-width: 100%;
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.6;
@@ -5910,7 +5915,7 @@ section {
     align-items: flex-start;
   }
 }
-.role-badge.super-admin { background: #8e44ad; }
+.role-badge.headmaster { background: #8e44ad; }
 .role-badge.academic { background: #3498db; }
 .role-badge.discipline { background: #e74c3c; }
 .role-badge.accounts { background: #27ae60; }
@@ -5929,4 +5934,23 @@ section {
   .app-actions-narrow summary::-webkit-details-marker { display: none; }
   .app-actions-narrow[open] summary { border-color: #1a3a5c; color: #1a3a5c; }
   .app-actions-narrow > div > button { display: flex; width: 100%; margin: 2px 0; }
+}
+
+/* ==================== SHARED RESPONSIVE HELPERS ====================
+   Small layout utilities used by portals and embedded panels. Inline styles
+   still decide colours and spacing; these classes only handle layout. */
+.portal-main { padding: 22px; }
+
+.resp-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .portal-main { padding: 14px; }
+}
+
+@media (max-width: 600px) {
+  .resp-fields { grid-template-columns: 1fr; }
 }

@@ -8,7 +8,7 @@ const { authorizeStudentAccess } = require('../utils/access');
 
 const router = express.Router();
 
-router.get('/discipline-admin/cases', authMiddleware, requireRole('discipline_admin', 'super_admin'), async (req, res) => {
+router.get('/discipline-admin/cases', authMiddleware, requireRole('discipline_admin', 'headmaster'), async (req, res) => {
   try {
     const cases = await Discipline.find().sort({ createdAt: -1 });
     res.json(cases);
@@ -17,7 +17,7 @@ router.get('/discipline-admin/cases', authMiddleware, requireRole('discipline_ad
   }
 });
 
-router.post('/discipline-admin/cases', authMiddleware, requireRole('teacher', 'discipline_admin', 'super_admin'), async (req, res) => {
+router.post('/discipline-admin/cases', authMiddleware, requireRole('teacher', 'discipline_admin', 'headmaster'), async (req, res) => {
   try {
     // The read and update routes on this file already restrict the case record
     // to discipline staff, but creation had no role check at all, so any
@@ -61,7 +61,7 @@ router.post('/discipline-admin/cases', authMiddleware, requireRole('teacher', 'd
   }
 });
 
-router.put('/discipline-admin/cases/:id', authMiddleware, requireRole('discipline_admin', 'super_admin'), async (req, res) => {
+router.put('/discipline-admin/cases/:id', authMiddleware, requireRole('discipline_admin', 'headmaster'), async (req, res) => {
   try {
     const disciplineCase = await Discipline.findByIdAndUpdate(
       req.params.id,
@@ -74,7 +74,7 @@ router.put('/discipline-admin/cases/:id', authMiddleware, requireRole('disciplin
   }
 });
 
-router.get('/discipline-admin/stats', authMiddleware, requireRole('discipline_admin', 'super_admin'), async (req, res) => {
+router.get('/discipline-admin/stats', authMiddleware, requireRole('discipline_admin', 'headmaster'), async (req, res) => {
   try {
     const [pending, resolved, total] = await Promise.all([
       Discipline.countDocuments({ status: 'pending' }),

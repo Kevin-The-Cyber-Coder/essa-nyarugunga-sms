@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
+const { ALL_ROLES, normalizeRole } = require('../config/roles');
 
 const userSchema = new mongoose.Schema({
   fullName: String,
   email: { type: String, unique: true },
   password: String,
-  role: String,
+  role: { type: String, enum: ALL_ROLES, required: true },
   phone: String,
   profileImage: String,
   isActive: { type: Boolean, default: true },
@@ -33,6 +34,13 @@ const userSchema = new mongoose.Schema({
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   createdAt: { type: Date, default: Date.now }
+});
+
+// Legacy records stored `headmaster`; normalise them to `headmaster` on save
+// so the enum is satisfied without needing a separate data migration first.
+userSchema.pre('validate', function (next) {
+  if (this.role) this.role = normalizeRole(this.role);
+  next();
 });
 
 module.exports = mongoose.model('User', userSchema);

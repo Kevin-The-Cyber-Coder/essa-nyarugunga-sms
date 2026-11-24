@@ -1,10 +1,11 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { ROLE_ROUTES, normalizeRole } from '../config/roles';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem('portalToken');
-  const userRole = localStorage.getItem('userRole');
+  const userRole = normalizeRole(localStorage.getItem('userRole'));
 
   if (token && (localStorage.getItem('mustChangePassword') === 'true' || localStorage.getItem('mustSetPassword') === 'true')) {
     return <Navigate to="/portal/change-password" replace />;
@@ -20,37 +21,11 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     });
     return <Navigate to="/portal/login" replace />;
   }
-  
-  if (allowedRoles && !allowedRoles.includes(userRole)) {
-    // Redirect to appropriate dashboard based on role instead of showing error
-    let redirectPath = '/portal/login';
-    
-    switch(userRole) {
-      case 'super_admin':
-        redirectPath = '/portal/super-admin';
-        break;
-      case 'academic_admin':
-        redirectPath = '/portal/academic-admin';
-        break;
-      case 'accounts_admin':
-        redirectPath = '/portal/accounts-admin';
-        break;
-      case 'discipline_admin':
-        redirectPath = '/portal/discipline-admin';
-        break;
-      case 'teacher':
-        redirectPath = '/portal/teacher';
-        break;
-      case 'student':
-        redirectPath = '/portal/student';
-        break;
-      case 'parent':
-        redirectPath = '/portal/parent';
-        break;
-      default:
-        redirectPath = '/portal/login';
-    }
-    
+
+  if (allowedRoles && !allowedRoles.map(normalizeRole).includes(userRole)) {
+    // Redirect to the role's own dashboard instead of showing an error.
+    const redirectPath = ROLE_ROUTES[userRole] || '/portal/login';
+
     Swal.fire({
       title: 'Unauthorized',
       text: `You don't have permission to access this page. Redirecting to your dashboard.`,
@@ -60,7 +35,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     });
     return <Navigate to={redirectPath} replace />;
   }
-  
+
   return children;
 };
 

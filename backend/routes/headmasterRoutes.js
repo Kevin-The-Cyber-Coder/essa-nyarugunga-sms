@@ -17,20 +17,27 @@ const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
 const { sendWelcomeEmail } = require('../utils/emailService');
 const { paginate, respondList } = require('../utils/paginate');
+const { ROLES, CREATABLE_ADMIN_ROLES } = require('../config/roles');
 
 const router = express.Router();
 
-router.get('/super-admin/admins', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.get('/headmaster/admins', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   const { page, limit, skip } = paginate(req.query);
-  const total = await User.countDocuments({ role: { $in: ['academic_admin', 'discipline_admin', 'accounts_admin'] } });
-  const admins = await User.find({ role: { $in: ['academic_admin', 'discipline_admin', 'accounts_admin'] } })
+  const total = await User.countDocuments({ role: { $in: CREATABLE_ADMIN_ROLES } });
+  const admins = await User.find({ role: { $in: CREATABLE_ADMIN_ROLES } })
     .select(SAFE_USER_SELECT).skip(skip).limit(limit || undefined);
   respondList(res, admins, { page, limit, total });
 });
 
-router.post('/super-admin/create-admin', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.post('/headmaster/create-admin', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   try {
     const { fullName, email, password, phone, role } = req.body;
+    // Never trust a client-supplied role: only the four delegated admin roles
+    // can be created here. Headmaster and student/parent roles have their own
+    // controlled flows.
+    if (!CREATABLE_ADMIN_ROLES.includes(role)) {
+      return res.status(400).json({ message: 'Invalid admin role' });
+    }
     if (await User.findOne({ email })) return res.status(400).json({ message: 'Email already exists' });
 
     // A supplied password has to satisfy the same policy as any other. A
@@ -69,7 +76,7 @@ router.post('/super-admin/create-admin', authMiddleware, requireRole('super_admi
   }
 });
 
-router.put('/super-admin/admins/:id', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.put('/headmaster/admins/:id', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   try {
     const { fullName, phone, isActive } = req.body;
     const user = await User.findByIdAndUpdate(req.params.id, { fullName, phone, isActive }, { new: true }).select(SAFE_USER_SELECT);
@@ -79,12 +86,12 @@ router.put('/super-admin/admins/:id', authMiddleware, requireRole('super_admin')
   }
 });
 
-router.delete('/super-admin/admins/:id', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.delete('/headmaster/admins/:id', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   await User.findByIdAndDelete(req.params.id);
   res.json({ success: true });
 });
 
-router.get('/super-admin/stats', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.get('/headmaster/stats', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   try {
     const [totalStudents, totalTeachers, totalClasses, pendingApplications, pendingDiscipline, pendingPermissions, totalIncome, totalExpenses] = await Promise.all([
       Student.countDocuments({ isActive: true }),
@@ -108,7 +115,7 @@ router.get('/super-admin/stats', authMiddleware, requireRole('super_admin'), asy
   }
 });
 
-router.get('/super-admin/users', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.get('/headmaster/users', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   try {
     const users = await User.find().select(SAFE_USER_SELECT).sort({ createdAt: -1 });
     res.json(users);
@@ -117,7 +124,7 @@ router.get('/super-admin/users', authMiddleware, requireRole('super_admin'), asy
   }
 });
 
-router.put('/super-admin/users/:id/toggle-active', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.put('/headmaster/users/:id/toggle-active', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found' });

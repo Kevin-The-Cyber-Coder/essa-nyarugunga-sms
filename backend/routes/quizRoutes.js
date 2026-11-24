@@ -17,8 +17,8 @@ const router = express.Router();
 // teacher ends up authoring a quiz for, and reading the marks of, another
 // teacher's form: 'teacher' has to be in the first list and must not be in the
 // second.
-const QUIZ_ROLES = ['teacher', 'academic_admin', 'super_admin'];
-const quizOversight = (role) => role === 'academic_admin' || role === 'super_admin';
+const QUIZ_ROLES = ['teacher', 'academic_admin', 'headmaster'];
+const quizOversight = (role) => role === 'academic_admin' || role === 'headmaster';
 
 // ==================== shared helpers ====================
 

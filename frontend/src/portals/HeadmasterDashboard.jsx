@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import io from 'socket.io-client';
 import PreferencesPanel from '../components/PreferencesPanel';
 import ThemeToggle from '../components/ThemeToggle';
 import GroupedNav from '../components/GroupedNav';
-import MessagingPanel from '../components/chat/MessagingPanel';
+import ApplicationsPanel from './ApplicationsPanel';
+import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
+import { ROLES } from '../config/roles';
 
 const API_URL = import.meta.env.VITE_API_URL;
-const SOCKET_URL = API_URL;
 const getToken = () => localStorage.getItem('portalToken');
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
@@ -17,7 +17,7 @@ const fmt = (d) => d ? new Date(d).toLocaleDateString('en-RW', { day:'2-digit', 
 const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour:'2-digit', minute:'2-digit' }) : '';
 const roleBadge = (role) => {
   const map = {
-    super_admin:      { label:'Super Admin',     color:'#ffc107', bg:'var(--tint-amber)' },
+    headmaster:      { label:'Headmaster',     color:'#ffc107', bg:'var(--tint-amber)' },
     academic_admin:   { label:'Academic Admin',  color:'#27ae60', bg:'var(--tint-success)' },
     discipline_admin: { label:'Discipline Admin',color:'#e74c3c', bg:'var(--tint-danger)' },
     accounts_admin:   { label:'Accounts Admin',  color:'#3498db', bg:'var(--tint-primary)' },
@@ -210,9 +210,8 @@ const Btn = ({ children, onClick, icon, color='#1a3a5c', textColor='var(--on-sol
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
-const SuperAdminDashboard = () => {
+const HeadmasterDashboard = () => {
   const navigate = useNavigate();
-  const messagesEndRef = useRef(null);
 
   // ─── layout
   const [activeTab, setActiveTab]       = useState('overview');
@@ -240,15 +239,6 @@ const SuperAdminDashboard = () => {
   const [topFailingIps, setTopFailingIps] = useState([]);
   const [secLoading, setSecLoading]     = useState(false);
 
-  // ─── messaging
-  const [msgUsers, setMsgUsers]         = useState([]);
-  const [msgTab, setMsgTab]             = useState('inbox');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [messages, setMessages]         = useState([]);
-  const [msgText, setMsgText]           = useState('');
-  const [unread, setUnread]             = useState(0);
-  const [socket, setSocket]             = useState(null);
-  const [msgSearch, setMsgSearch]       = useState('');
 
   // ─── modals
   const [adminModal, setAdminModal]     = useState(false);
@@ -285,31 +275,16 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, secHours]);
 
-  // ─── socket
-  useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    const sock = io(SOCKET_URL, { auth: { token } });
-    setSocket(sock);
-    if (userId) sock.emit('join', userId);
-    sock.on('new_message', () => { fetchUnread(); fetchMsgUsers(); });
-    sock.on('newMessage',  () => { fetchUnread(); fetchMsgUsers(); });
-    return () => sock.disconnect();
-  }, [userId]);
-
   // ─── auth guard
   useEffect(() => {
     const token = getToken();
     const role  = localStorage.getItem('userRole');
-    if (!token || role !== 'super_admin') { navigate('/portal/login'); return; }
+    if (!token || role !== 'headmaster') { navigate('/portal/login'); return; }
     Promise.all([
       fetchStats(), fetchAdmins(), fetchAnnouncements(),
-      fetchDiscipline(), fetchPermissions(), fetchMsgUsers(), fetchUnread(),
+      fetchDiscipline(), fetchPermissions(),
     ]).finally(() => setLoading(false));
   }, [navigate]);
-
-  // ─── scroll messages to bottom
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior:'smooth' }); }, [messages]);
 
   // ─── API calls ─────────────────────────────────────────────────────────────
   const api = useCallback(async (path, opts = {}) => {
@@ -323,19 +298,19 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
 
   // FIXED: All fetch functions now properly handle errors and always set arrays
   const fetchStats = () => {
-    api('/super-admin/stats')
+    api('/headmaster/stats')
       .then(d => setStats(d || {}))
       .catch(() => setStats({}));
   };
 
   const fetchAdmins = () => {
-    api('/super-admin/admins')
+    api('/headmaster/admins')
       .then(d => setAdmins(Array.isArray(d) ? d : []))
       .catch(() => setAdmins([]));
   };
 
   const fetchAnnouncements = () => {
-    api('/super-admin/announcements')
+    api('/headmaster/announcements')
       .then(d => setAnnouncements(Array.isArray(d) ? d : []))
       .catch(() => setAnnouncements([]));
   };
@@ -360,28 +335,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     api('/permissions')
       .then(d => setPermissions(Array.isArray(d) ? d : []))
       .catch(() => setPermissions([]));
-  };
-
-  const fetchMsgUsers = () => {
-    api('/messages/users')
-      .then(d => {
-        const all = Object.values(d?.users || d || {});
-        setMsgUsers(Array.isArray(all) ? all.flat() : []);
-      })
-      .catch(() => setMsgUsers([]));
-  };
-
-  const fetchUnread = () => {
-    api('/messages/unread-count')
-      .then(d => setUnread(d?.count || 0))
-      .catch(() => setUnread(0));
-  };
-
-  const fetchConversation = (uid) => {
-    if (!uid) return;
-    api(`/messages/conversation/${uid}`)
-      .then(d => setMessages(Array.isArray(d?.messages) ? d.messages : []))
-      .catch(() => setMessages([]));
   };
 
   // ─── sign-in security trail ────────────────────────────────────────────────
@@ -461,7 +414,7 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     }
     setSaving(true);
     try {
-      await api('/super-admin/create-admin', { method:'POST', body: JSON.stringify(adminForm) });
+      await api('/headmaster/create-admin', { method:'POST', body: JSON.stringify(adminForm) });
       Swal.fire({
         title: '✅ Admin Created!',
         html: `<p><b>${adminForm.fullName}</b> (${adminForm.role.replace(/_/g, ' ')})<br>Email: <code>${adminForm.email}</code><br>Password: <code>${adminForm.password || 'admin123'}</code></p>`,
@@ -489,7 +442,7 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     });
     if (!ok.isConfirmed) return;
     try {
-      await api(`/super-admin/admins/${admin._id}`, { method: 'DELETE' });
+      await api(`/headmaster/admins/${admin._id}`, { method: 'DELETE' });
       Swal.fire('Deleted!', '', 'success');
       fetchAdmins();
       fetchStats();
@@ -505,7 +458,7 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     }
     setSaving(true);
     try {
-      await api('/super-admin/announcements', { method: 'POST', body: JSON.stringify(annoForm) });
+      await api('/headmaster/announcements', { method: 'POST', body: JSON.stringify(annoForm) });
       Swal.fire(
         annoForm.scheduledAt ? '🗓️ Scheduled!' : '📢 Posted!',
         annoForm.scheduledAt ? `It will go out on ${new Date(annoForm.scheduledAt).toLocaleString()}.` : 'Announcement sent to all users',
@@ -531,7 +484,7 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     });
     if (!ok.isConfirmed) return;
     try {
-      await api(`/super-admin/announcements/${id}`, { method: 'DELETE' });
+      await api(`/headmaster/announcements/${id}`, { method: 'DELETE' });
       Swal.fire('Deleted!', '', 'success');
       fetchAnnouncements();
     } catch (e) {
@@ -596,27 +549,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     }
   };
 
-  const sendMessage = async () => {
-    if (!msgText.trim() || !selectedUser) return;
-    try {
-      const res = await api('/messages/send', {
-        method: 'POST',
-        body: JSON.stringify({
-          recipientId: selectedUser._id,
-          subject: 'Direct Message',
-          content: msgText.trim(),
-        })
-      });
-      setMessages(prev => [...prev, res.message]);
-      setMsgText('');
-      if (socket) socket.emit('sendMessage', { receiverId: selectedUser._id, ...res.message });
-      fetchUnread();
-      fetchMsgUsers();
-    } catch (e) {
-      console.error('Send message error:', e);
-    }
-  };
-
   const saveProfile = async () => {
     setSaving(true);
     try {
@@ -669,11 +601,12 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
       { id: 'discipline', label: 'Discipline', icon: 'fas fa-gavel' },
     ]},
     { id: 'g-approvals', label: 'Approvals',    icon: 'fas fa-file-signature', items: [
+      { id: 'applications', label: 'Admissions', icon: 'fas fa-file-circle-check' },
       { id: 'permissions', label: 'Permissions', icon: 'fas fa-file-signature' },
     ]},
     { id: 'g-comms',    label: 'Communication', icon: 'fas fa-bullhorn',      items: [
       { id: 'announcements', label: 'Announcements', icon: 'fas fa-bullhorn' },
-      { id: 'messages',      label: 'Messages',      icon: 'fas fa-comments', badge: unread },
+      { id: 'website', label: 'Website content', icon: 'fas fa-newspaper' },
     ]},
     { id: 'g-security', label: 'Security',      icon: 'fas fa-shield-alt',    items: [
       { id: 'security-logins',  label: 'Sign-in History',   icon: 'fas fa-clock-rotate-left' },
@@ -685,12 +618,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
   ];
 
   const menuItems = navGroups.flatMap(g => g.items);
-
-  // ─── filtered users for message search ────────────────────────────────────
-  const filteredUsers = msgUsers.filter(u =>
-    u.fullName?.toLowerCase().includes(msgSearch.toLowerCase()) ||
-    u.role?.toLowerCase().includes(msgSearch.toLowerCase())
-  );
 
   if (loading) {
     return (
@@ -718,8 +645,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
         ::-webkit-scrollbar{width:5px;height:5px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:#ccc;border-radius:10px}
-        .msg-bubble-sent{background:#1a3a5c;color:white;border-radius:18px 18px 4px 18px;padding:10px 15px;max-width:70%;align-self:flex-end;font-size:13px;line-height:1.5}
-        .msg-bubble-received{background:white;color:#333;border-radius:18px 18px 18px 4px;padding:10px 15px;max-width:70%;align-self:flex-start;font-size:13px;line-height:1.5;box-shadow:0 1px 4px rgba(0,0,0,.08)}
       `}</style>
 
       {/* ── Mobile overlay ── */}
@@ -816,15 +741,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:14 }}>
             <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-            {unread > 0 && (
-              <button onClick={() => setActiveTab('messages')}
-                style={{ position:'relative', background:'none', border:'none', cursor:'pointer', color:'var(--text-faint)', fontSize:18 }}>
-                <i className="fas fa-bell" />
-                <span style={{ position:'absolute', top:-4, right:-4, background:'#e74c3c',
-                  color:'var(--on-solid)', borderRadius:'50%', fontSize:9, fontWeight:700,
-                  width:16, height:16, display:'flex', alignItems:'center', justifyContent:'center' }}>{unread}</span>
-              </button>
-            )}
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <Avatar name={userName} size={34} />
               <div>
@@ -974,10 +890,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
                         bg={a.isActive !== false ? '#e8f5e9' : '#fdecea'} /></TD>
                       <TD>
                         <div style={{ display:'flex', gap:6 }}>
-                          <Btn small icon="fas fa-comment" color="#3498db"
-                            onClick={() => { setSelectedUser(a); setActiveTab('messages'); fetchConversation(a._id); }}>
-                            Message
-                          </Btn>
                           <Btn small danger icon="fas fa-trash" onClick={() => deleteAdmin(a)}>Delete</Btn>
                         </div>
                       </TD>
@@ -1295,12 +1207,19 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
             </div>
           )}
 
-          {/* ╔══ MESSAGES ══╗ */}
-          {activeTab === 'messages' && (
-            <MessagingPanel recipient={selectedUser || undefined} height="calc(100vh - 150px)" />
+          {/* ╔══ PROFILE ══╗ */}
+          {activeTab === 'applications' && (
+            <div>
+              <div style={{ marginBottom: 18 }}>
+                <h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>Admission applications</h2>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>Final approval and rejection only. Review is prepared by the Admin Assistant.</p>
+              </div>
+              <ApplicationsPanel role={ROLES.HEADMASTER} />
+            </div>
           )}
 
-          {/* ╔══ PROFILE ══╗ */}
+          {activeTab === 'website' && <WebsiteContentPanel role={ROLES.HEADMASTER} />}
+
           {activeTab === 'profile' && (
             <div style={{ maxWidth: 640, margin: '0 auto' }}>
               {/* header card */}
@@ -1438,4 +1357,4 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
   );
 };
 
-export default SuperAdminDashboard;
+export default HeadmasterDashboard;

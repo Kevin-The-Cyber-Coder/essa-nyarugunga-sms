@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useState } from 'react';
  * just sets the same tab id the flat menu used to set, so the existing
  * `activeTab === '...'` render blocks keep working.
  *
- * Expects the dark sidebar look shared by the super admin, academic admin,
+ * Expects the dark sidebar look shared by the headmaster, academic admin,
  * accounts admin, discipline admin, teacher and parent portals.
  */
 

@@ -219,7 +219,7 @@ const createStaffAnnouncement = async (req, res) => {
 
 router.post('/announcements', authMiddleware, async (req, res) => {
   try {
-    const allowedRoles = ['super_admin', 'academic_admin', 'discipline_admin', 'accounts_admin'];
+    const allowedRoles = ['headmaster', 'academic_admin', 'discipline_admin', 'accounts_admin', 'admin_assistant'];
     if (!allowedRoles.includes(req.userRole)) {
       return res.status(403).json({ message: 'Access denied. You do not have permission to post announcements.' });
     }
@@ -230,7 +230,7 @@ router.post('/announcements', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/super-admin/announcements', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.get('/headmaster/announcements', authMiddleware, requireRole('headmaster'), async (req, res) => {
   try {
     const announcements = await Announcement.find().sort({ createdAt: -1 });
     const formatted = announcements.map(ann => ({
@@ -241,21 +241,21 @@ router.get('/super-admin/announcements', authMiddleware, requireRole('super_admi
     }));
     res.json(formatted);
   } catch (error) {
-    console.error('GET /api/super-admin/announcements error:', error);
+    console.error('GET /api/headmaster/announcements error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-router.post('/super-admin/announcements', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.post('/headmaster/announcements', authMiddleware, requireRole('headmaster'), async (req, res) => {
   try {
     await createStaffAnnouncement(req, res);
   } catch (error) {
-    console.error('POST /api/super-admin/announcements error:', error);
+    console.error('POST /api/headmaster/announcements error:', error);
     res.status(500).json({ message: error.message });
   }
 });
 
-router.put('/super-admin/announcements/:id', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.put('/headmaster/announcements/:id', authMiddleware, requireRole('headmaster'), async (req, res) => {
   try {
     const existing = await Announcement.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Announcement not found' });
@@ -316,7 +316,7 @@ router.put('/super-admin/announcements/:id', authMiddleware, requireRole('super_
   }
 });
 
-router.delete('/super-admin/announcements/:id', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.delete('/headmaster/announcements/:id', authMiddleware, requireRole('headmaster'), async (req, res) => {
   try {
     await Announcement.findByIdAndDelete(req.params.id);
     res.json({ success: true });

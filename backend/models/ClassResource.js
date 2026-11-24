@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
 
-// A document or link pinned to a class for its members. Deliberately separate
-// from chat attachments: those die with the message that carried them, whereas
-// a resource is meant to stay findable for the whole term.
+// A document or link pinned to a class for its members. Resources persist for
+// the class and remain findable for the whole term.
 const classResourceSchema = new mongoose.Schema({
   classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
   title: { type: String, trim: true, maxlength: 160 },

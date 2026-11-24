@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { notificationApi } from './notificationApi';
-import { timeAgo } from '../chat/chatFormat';
+import { timeAgo } from '../../utils/time';
 import './notifications.css';
 
 const TYPE_STYLE = {
-  message:        { icon: 'fa-envelope',        color: '#2563eb', label: 'Message' },
-  group_message:  { icon: 'fa-users',           color: '#7c3aed', label: 'Group' },
-  mention:        { icon: 'fa-at',              color: '#be185d', label: 'Mention' },
-  reply:          { icon: 'fa-reply',           color: '#0e7490', label: 'Reply' },
   announcement:   { icon: 'fa-bullhorn',        color: '#16653f', label: 'Announcement' },
   assignment:     { icon: 'fa-book-open',       color: '#b45309', label: 'Assignment' },
   homework:       { icon: 'fa-pen-to-square',   color: '#b45309', label: 'Homework' },
   academic_feedback: { icon: 'fa-comment-dots', color: '#0e7490', label: 'Feedback' },
+  admission:      { icon: 'fa-user-plus',       color: '#6d28d9', label: 'Admission' },
   exam:           { icon: 'fa-file-lines',      color: '#b91c1c', label: 'Exam' },
   fee:            { icon: 'fa-coins',           color: '#15803d', label: 'Fee' },
   attendance:     { icon: 'fa-clipboard-check', color: '#4b5563', label: 'Attendance' },
@@ -116,12 +113,12 @@ const NotificationCentre = ({ onNavigate, onUnreadChange, refreshSignal = 0, max
           <i className="fas fa-bell" style={{ color: 'var(--brand)' }} />
           <span style={{ fontWeight: 700, flex: 1 }}>Notifications</span>
           {unread > 0 && (
-            <button className="ck-btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={markAllRead}>
+            <button className="nx-btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={markAllRead}>
               <i className="fas fa-check-double" /> Mark all read
             </button>
           )}
           {items.length > 0 && (
-            <button className="ck-iconbtn" title="Clear read items" onClick={() => refresh()}>
+            <button className="nx-iconbtn" title="Clear read items" onClick={() => refresh()}>
               <i className="fas fa-refresh" />
             </button>
           )}
@@ -152,14 +149,14 @@ const NotificationCentre = ({ onNavigate, onUnreadChange, refreshSignal = 0, max
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, maxHeight }}>
         {loading && !items.length && (
-          <div className="ck-empty" style={{ padding: 30 }}>
-            <i className="fas fa-spinner fa-spin ck-bigicon" />
+          <div className="nx-empty" style={{ padding: 30 }}>
+            <i className="fas fa-spinner fa-spin nx-bigicon" />
           </div>
         )}
 
         {!loading && !items.length && (
-          <div className="ck-empty" style={{ padding: 30, fontSize: 13 }}>
-            <i className="fas fa-bell-slash ck-bigicon" />
+          <div className="nx-empty" style={{ padding: 30, fontSize: 13 }}>
+            <i className="fas fa-bell-slash nx-bigicon" />
             No notifications {unreadOnly ? 'unread' : ''}.
           </div>
         )}
@@ -187,7 +184,7 @@ const NotificationCentre = ({ onNavigate, onUnreadChange, refreshSignal = 0, max
                 </div>
               </div>
               <span
-                className="ck-iconbtn"
+                className="nx-iconbtn"
                 style={{ width: 26, height: 26, fontSize: 13 }}
                 onClick={(e) => deleteItem(n._id, e)}
                 title="Delete"
@@ -200,7 +197,7 @@ const NotificationCentre = ({ onNavigate, onUnreadChange, refreshSignal = 0, max
 
         {hasMore && (
           <div style={{ padding: 10, textAlign: 'center' }}>
-            <button className="ck-btn" onClick={() => load(items[items.length - 1]?._id)} disabled={loading}>
+            <button className="nx-btn" onClick={() => load(items[items.length - 1]?._id)} disabled={loading}>
               {loading ? <i className="fas fa-spinner fa-spin" /> : 'Load more'}
             </button>
           </div>

@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import io from 'socket.io-client';
 import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
-import MessagingPanel from '../components/chat/MessagingPanel';
+import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
 
 const API_URL = import.meta.env.VITE_API_URL;
-const SOCKET_URL = API_URL;
 const getToken = () => localStorage.getItem('portalToken');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
@@ -91,7 +89,7 @@ const TD = ({ children, style }) => <td style={{ padding: '10px 14px', fontSize:
 // Role badge helper
 const roleBadge = (role) => {
   const map = {
-    super_admin:      { label: 'Super Admin', color: '#ffc107', bg:'var(--tint-amber)' },
+    headmaster:      { label: 'Headmaster', color: '#ffc107', bg:'var(--tint-amber)' },
     academic_admin:   { label: 'Academic Admin', color: '#27ae60', bg:'var(--tint-success)' },
     discipline_admin: { label: 'Discipline Admin', color: '#e74c3c', bg:'var(--tint-danger)' },
     accounts_admin:   { label: 'Accounts Admin', color: '#3498db', bg:'var(--tint-primary)' },
@@ -105,7 +103,6 @@ const roleBadge = (role) => {
 // ═══════════════════════════════════════════════════════════════════
 const AccountsAdminDashboard = () => {
   const navigate = useNavigate();
-  const messagesEndRef = useRef(null);
   
   const [activeTab, setActiveTab] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -120,7 +117,6 @@ const AccountsAdminDashboard = () => {
   const [expenses, setExpenses] = useState([]);
   const [feeStructures, setFeeStructures] = useState([]);
   const [feePayments, setFeePayments] = useState([]);
-  const [salaries, setSalaries] = useState([]);
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -137,13 +133,11 @@ const AccountsAdminDashboard = () => {
   const [expenseModal, setExpenseModal] = useState(false);
   const [feeModal, setFeeModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
-  const [salaryModal, setSalaryModal] = useState(false);
   const [budgetModal, setBudgetModal] = useState(false);
 
   const [incomeForm, setIncomeForm] = useState({ source: '', amount: '', date: new Date().toISOString().split('T')[0], description: '', reference: '' });
   const [expenseForm, setExpenseForm] = useState({ category: '', amount: '', date: new Date().toISOString().split('T')[0], description: '', reference: '' });
   const [feeForm, setFeeForm] = useState({ classId: '', feeType: '', amount: '', dueDate: '', description: '' });
-  const [salaryForm, setSalaryForm] = useState({ teacherName: '', subject: '', amount: '', month: '', year: new Date().getFullYear(), status: 'pending' });
   const [paymentForm, setPaymentForm] = useState({ studentId: '', feeType: '', amount: '', paymentDate: new Date().toISOString().split('T')[0], paymentMethod: 'cash', reference: '' });
 
   const [newBudget, setNewBudget] = useState('');
@@ -151,15 +145,6 @@ const AccountsAdminDashboard = () => {
   // filters
   const [recordSearch, setRecordSearch] = useState('');
 
-  // messaging
-  const [msgUsers, setMsgUsers] = useState([]);
-  const [msgTab, setMsgTab] = useState('inbox');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [msgText, setMsgText] = useState('');
-  const [unread, setUnread] = useState(0);
-  const [socket, setSocket] = useState(null);
-  const [msgSearch, setMsgSearch] = useState('');
   const userName = localStorage.getItem('userName') || 'Accounts Admin';
   const userId = localStorage.getItem('userId');
 
@@ -168,26 +153,12 @@ const AccountsAdminDashboard = () => {
     check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Socket connection
-  useEffect(() => {
-    const token = getToken(); if (!token) return;
-    const sock = io(SOCKET_URL, { auth: { token } });
-    setSocket(sock);
-    if (userId) sock.emit('join', userId);
-    sock.on('new_message', () => { fetchUnread(); fetchMsgUsers(); });
-    sock.on('newMessage', () => { fetchUnread(); fetchMsgUsers(); });
-    return () => sock.disconnect();
-  }, [userId]);
-
   // Auth check
   useEffect(() => {
     const token = getToken(); const role = localStorage.getItem('userRole');
     if (!token || role !== 'accounts_admin') { navigate('/portal/login'); return; }
     loadAll();
   }, [navigate]);
-
-  // Scroll messages to bottom
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const api = useCallback(async (path, opts = {}) => {
     const res = await fetch(`${API_URL}/api${path}`, { headers: authHeaders(), ...opts });
@@ -201,8 +172,8 @@ const AccountsAdminDashboard = () => {
 
   const loadAll = () => Promise.allSettled([
     fetchBudget(), fetchIncome(), fetchExpenses(), fetchFees(),
-    fetchPayments(), fetchSalaries(), fetchClasses(), fetchStudents(),
-    fetchUnread(), fetchMsgUsers(), fetchAnnouncements(),
+    fetchPayments(), fetchClasses(), fetchStudents(),
+    fetchAnnouncements(),
     fetchInvoices(), fetchAnalytics(), fetchFinancialSummary(),
   ]).finally(() => setLoading(false));
 
@@ -212,7 +183,6 @@ const AccountsAdminDashboard = () => {
   const fetchExpenses = () => api('/accounts/expenses').then(d => setExpenses(Array.isArray(d) ? d : [])).catch(() => {});
   const fetchFees = () => api('/accounts/fee-structures').then(d => setFeeStructures(Array.isArray(d) ? d : [])).catch(() => {});
   const fetchPayments = () => api('/accounts/payments').then(d => setFeePayments(Array.isArray(d) ? d : [])).catch(() => {});
-  const fetchSalaries = () => api('/accounts/salaries').then(d => setSalaries(Array.isArray(d) ? d : [])).catch(() => {});
   const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => {});
   const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => {});
   const fetchAnnouncements = () => {
@@ -228,45 +198,6 @@ const AccountsAdminDashboard = () => {
   };
   const fetchFinancialSummary = () => {
     api('/accounts/financial-summary').then(d => setFinancialSummary(d || null)).catch(() => setFinancialSummary(null));
-  };
-
-  const fetchUnread = () => {
-    api('/messages/unread-count')
-      .then(d => setUnread(d?.count || d?.unread || 0))
-      .catch(() => setUnread(0));
-  };
-
-  const fetchMsgUsers = () => {
-    api('/messages/users').then(d => {
-      const all = Object.values(d?.users || d || {});
-      setMsgUsers(Array.isArray(all) ? all.flat() : []);
-    }).catch(() => setMsgUsers([]));
-  };
-
-  const fetchConversation = (uid) => {
-    if (!uid) return;
-    api(`/messages/conversation/${uid}`).then(d => setMessages(Array.isArray(d?.messages) ? d.messages : [])).catch(() => setMessages([]));
-  };
-
-  const sendMessage = async () => {
-    if (!msgText.trim() || !selectedUser) return;
-    try {
-      const res = await api('/messages/send', {
-        method: 'POST',
-        body: JSON.stringify({
-          recipientId: selectedUser._id,
-          subject: 'Direct Message',
-          content: msgText.trim(),
-        })
-      });
-      setMessages(prev => [...prev, res.message]);
-      setMsgText('');
-      if (socket) socket.emit('sendMessage', { receiverId: selectedUser._id, ...res.message });
-      fetchUnread();
-      fetchMsgUsers();
-    } catch (e) {
-      console.error('Send message error:', e);
-    }
   };
 
   // ─── financial actions ───────────────────────────────────────────
@@ -323,25 +254,6 @@ const AccountsAdminDashboard = () => {
       fetchPayments();
     } catch (e) { Swal.fire('Error', e.message || 'Failed', 'error'); }
     finally { setSaving(false); }
-  };
-
-  const addSalary = async () => {
-    if (!salaryForm.teacherName || !salaryForm.amount) { Swal.fire('Missing Fields', 'Teacher name and amount required', 'warning'); return; }
-    setSaving(true);
-    try {
-      await api('/accounts/salaries', { method: 'POST', body: JSON.stringify({ ...salaryForm, amount: parseFloat(salaryForm.amount) }) });
-      Swal.fire('✅ Salary Record Added!', '', 'success');
-      setSalaryModal(false); setSalaryForm({ teacherName: '', subject: '', amount: '', month: '', year: new Date().getFullYear(), status: 'pending' });
-      fetchSalaries();
-    } catch (e) { Swal.fire('Error', e.message || 'Failed', 'error'); }
-    finally { setSaving(false); }
-  };
-
-  const approveSalary = async (s) => {
-    const ok = await Swal.fire({ title: `Approve salary for ${s.teacherName}?`, text: fmtAmt(s.amount), icon: 'question', showCancelButton: true, confirmButtonColor: '#27ae60', confirmButtonText: 'Approve' });
-    if (!ok.isConfirmed) return;
-    await api(`/accounts/salaries/${s._id}/approve`, { method: 'PUT' });
-    Swal.fire('✅ Approved!', '', 'success'); fetchSalaries();
   };
 
   const updateBudget = async () => {
@@ -449,16 +361,10 @@ const AccountsAdminDashboard = () => {
 
   const totalIncome = income.reduce((s, i) => s + (i.amount || 0), 0);
   const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-  const pendingSalaries = salaries.filter(s => s.status === 'pending').length;
 
   const filteredRecords = [...income.map(i => ({ ...i, _type: 'income' })), ...expenses.map(e => ({ ...e, _type: 'expense' }))]
     .filter(t => !recordSearch || (t.source || t.category || '').toLowerCase().includes(recordSearch.toLowerCase()))
     .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const filteredUsers = msgUsers.filter(u =>
-    u.fullName?.toLowerCase().includes(msgSearch.toLowerCase()) ||
-    u.role?.toLowerCase().includes(msgSearch.toLowerCase())
-  );
 
   // Seven top-level domains; every feature below is reachable as a sub-item.
   const navGroups = [
@@ -481,10 +387,9 @@ const AccountsAdminDashboard = () => {
       ]
     },
     {
-      id: 'g-expenditure', label: 'Budget & Salaries', icon: 'fas fa-wallet',
+      id: 'g-budget', label: 'Budget', icon: 'fas fa-chart-pie',
       items: [
         { id: 'budget', label: 'Budget', icon: 'fas fa-chart-pie' },
-        { id: 'salaries', label: 'Salaries', icon: 'fas fa-wallet', badge: pendingSalaries },
       ]
     },
     {
@@ -497,7 +402,7 @@ const AccountsAdminDashboard = () => {
       id: 'g-comms', label: 'Communication', icon: 'fas fa-comments',
       items: [
         { id: 'announcements', label: 'Announcements', icon: 'fas fa-bullhorn' },
-        { id: 'messages', label: 'Messages', icon: 'fas fa-comments', badge: unread },
+        { id: 'content', label: 'Website content', icon: 'fas fa-newspaper' },
       ]
     },
     {
@@ -529,8 +434,6 @@ const AccountsAdminDashboard = () => {
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         .tab-anim{animation:fadeIn .22s ease}
         ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:10px}
-        .msg-bubble-sent{background:#1a3a5c;color:white;border-radius:18px 18px 4px 18px;padding:10px 15px;max-width:70%;align-self:flex-end;font-size:13px;line-height:1.5}
-        .msg-bubble-received{background:white;color:#333;border-radius:18px 18px 18px 4px;padding:10px 15px;max-width:70%;align-self:flex-start;font-size:13px;line-height:1.5;box-shadow:0 1px 4px rgba(0,0,0,.08)}
         @media(max-width:768px){.hide-m{display:none!important}}
       `}</style>
 
@@ -576,7 +479,6 @@ const AccountsAdminDashboard = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-            {unread > 0 && <div style={{ background:'var(--tint-danger)', color: '#e74c3c', borderRadius: 20, fontSize: 12, fontWeight: 700, padding: '4px 10px' }}>{unread} new msg</div>}
             <Avatar name={userName} size={32} />
             <div className="hide-m"><div style={{ fontSize: 12, fontWeight: 600, color:'var(--text-body)' }}>{userName}</div><div style={{ fontSize: 10, color: '#ffc107' }}>ACCOUNTS ADMIN</div></div>
           </div>
@@ -603,7 +505,6 @@ const AccountsAdminDashboard = () => {
                   { icon: 'fas fa-arrow-down', label: 'Total Income', value: fmtAmt(totalIncome), accent: '#27ae60', bg:'var(--tint-success)', action: () => setIncomeModal(true) },
                   { icon: 'fas fa-arrow-up', label: 'Total Expenses', value: fmtAmt(totalExpenses), accent: '#e74c3c', bg:'var(--tint-danger)', action: () => setExpenseModal(true) },
                   { icon: 'fas fa-balance-scale', label: 'Net Balance', value: fmtAmt(totalIncome - totalExpenses), accent: totalIncome - totalExpenses >= 0 ? '#27ae60' : '#e74c3c', bg:'var(--surface-muted)' },
-                  { icon: 'fas fa-wallet', label: 'Pending Salaries', value: pendingSalaries, accent: '#f39c12', bg:'var(--tint-warning)', action: () => setActiveTab('salaries') },
                   { icon: 'fas fa-credit-card', label: 'Fee Payments', value: feePayments.length, accent: '#3498db', bg:'var(--tint-primary)', action: () => setActiveTab('fees') },
                 ].map((s, i) => (
                   <div key={i} onClick={s.action} style={{ background:'var(--surface-card)', borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 10px rgba(0,0,0,.05)', cursor: s.action ? 'pointer' : 'default', transition: 'transform .2s', border:'1px solid var(--surface-page)' }}
@@ -626,7 +527,6 @@ const AccountsAdminDashboard = () => {
                 <Btn onClick={() => setExpenseModal(true)} icon="fas fa-minus-circle" color="#e74c3c">Add Expense</Btn>
                 <Btn onClick={() => setFeeModal(true)} icon="fas fa-tag" color="#3498db">Create Fee</Btn>
                 <Btn onClick={() => setPaymentModal(true)} icon="fas fa-credit-card" color="#1abc9c">Record Payment</Btn>
-                <Btn onClick={() => setSalaryModal(true)} icon="fas fa-wallet" color="#9b59b6">Add Salary</Btn>
                 <Btn onClick={() => setBudgetModal(true)} icon="fas fa-cog" color="#f39c12">Set Budget</Btn>
               </div>
 
@@ -930,43 +830,6 @@ const AccountsAdminDashboard = () => {
             </div>
           )}
 
-          {/* ══ SALARIES ══ */}
-          {activeTab === 'salaries' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Teacher Salaries</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{pendingSalaries} pending approval</p></div>
-                <Btn onClick={() => setSalaryModal(true)} icon="fas fa-plus" color="#1a3a5c">Add Salary Record</Btn>
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-                {[
-                  ['Total Records', salaries.length, '#1a3a5c', '#e8f0fb'],
-                  ['Pending', pendingSalaries, '#f39c12', '#fff3e0'],
-                  ['Approved', salaries.filter(s => s.status === 'approved').length, '#27ae60', '#e8f5e9'],
-                  ['Total Approved', fmtAmt(salaries.filter(s => s.status === 'approved').reduce((sum, s) => sum + (s.amount || 0), 0)), '#9b59b6', '#f3e5f5'],
-                ].map(([l, v, c, bg]) => (
-                  <div key={l} style={{ background: bg, borderRadius: 10, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: c, fontFamily: 'Georgia, serif' }}>{v}</div>
-                    <div style={{ fontSize: 11, color: c, opacity: .8, fontWeight: 600 }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                <Table cols={['Teacher', 'Subject', 'Month / Year', 'Amount', 'Status', 'Actions']} emptyMsg="No salary records yet"
-                  rows={salaries.map(s => (
-                    <React.Fragment key={s._id}>
-                      <TD><div style={{ fontWeight: 600, fontSize: 13 }}>{s.teacherName}</div></TD>
-                      <TD style={{ fontSize: 12 }}>{s.subject || '—'}</TD>
-                      <TD style={{ fontSize: 12 }}>{s.month} {s.year}</TD>
-                      <TD><span style={{ fontWeight: 700 }}>{fmtAmt(s.amount)}</span></TD>
-                      <TD><Badge text={s.status} color={s.status === 'approved' ? '#27ae60' : '#f39c12'} bg={s.status === 'approved' ? '#e8f5e9' : '#fff3e0'} /></TD>
-                      <TD>{s.status === 'pending' && <Btn small onClick={() => approveSalary(s)} color="#27ae60" icon="fas fa-check">Approve</Btn>}</TD>
-                    </React.Fragment>
-                  ))}
-                />
-              </div>
-            </div>
-          )}
-
           {/* ══ RECORDS ══ */}
           {activeTab === 'records' && (
             <div>
@@ -1038,10 +901,7 @@ const AccountsAdminDashboard = () => {
             </div>
           )}
 
-          {/* ══ MESSAGES ══ */}
-          {activeTab === 'messages' && (
-            <MessagingPanel recipient={selectedUser || undefined} height="calc(100vh - 150px)" />
-          )}
+          {activeTab === 'content' && <WebsiteContentPanel role="accounts_admin" />}
 
           {/* ══ PROFILE ══ */}
           {activeTab === 'profile' && (
@@ -1103,7 +963,6 @@ const AccountsAdminDashboard = () => {
       </Modal>
 
       <Modal open={expenseModal} onClose={() => setExpenseModal(false)} title="Record Expense">
-        <Field label="Category" required><Inp value={expenseForm.category} placeholder="e.g. Salaries, Utilities" onChange={e => setExpenseForm(p => ({ ...p, category: e.target.value }))} /></Field>
         <Field label="Amount (RWF)" required><Inp type="number" value={expenseForm.amount} placeholder="0" onChange={e => setExpenseForm(p => ({ ...p, amount: e.target.value }))} /></Field>
         <Field label="Date"><Inp type="date" value={expenseForm.date} onChange={e => setExpenseForm(p => ({ ...p, date: e.target.value }))} /></Field>
         <Field label="Description"><Txt value={expenseForm.description} rows={2} placeholder="Optional notes" onChange={e => setExpenseForm(p => ({ ...p, description: e.target.value }))} /></Field>
@@ -1152,19 +1011,6 @@ const AccountsAdminDashboard = () => {
         </div>
       </Modal>
 
-      <Modal open={salaryModal} onClose={() => setSalaryModal(false)} title="Add Salary Record">
-        <Field label="Teacher Name" required><Inp value={salaryForm.teacherName} placeholder="Full name" onChange={e => setSalaryForm(p => ({ ...p, teacherName: e.target.value }))} /></Field>
-        <Field label="Subject"><Inp value={salaryForm.subject} placeholder="e.g. Mathematics" onChange={e => setSalaryForm(p => ({ ...p, subject: e.target.value }))} /></Field>
-        <Field label="Amount (RWF)" required><Inp type="number" value={salaryForm.amount} placeholder="0" onChange={e => setSalaryForm(p => ({ ...p, amount: e.target.value }))} /></Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Month"><Inp value={salaryForm.month} placeholder="e.g. January" onChange={e => setSalaryForm(p => ({ ...p, month: e.target.value }))} /></Field>
-          <Field label="Year"><Inp type="number" value={salaryForm.year} onChange={e => setSalaryForm(p => ({ ...p, year: parseInt(e.target.value) }))} /></Field>
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <Btn onClick={() => setSalaryModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-          <Btn onClick={addSalary} icon="fas fa-wallet" color="#9b59b6" disabled={saving}>{saving ? 'Saving...' : 'Add Salary'}</Btn>
-        </div>
-      </Modal>
     </div>
   );
 };

@@ -105,7 +105,7 @@ router.delete('/notifications', authMiddleware, async (req, res) => {
 
 // ─── preferences ─────────────────────────────────────────────────────────────
 
-const CHANNEL_KEYS = ['inApp', 'email', 'push', 'sms'];
+const CHANNEL_KEYS = ['inApp', 'email'];
 
 const sanitizePreferences = (body, current) => {
   const updates = {};
@@ -146,16 +146,6 @@ const sanitizePreferences = (body, current) => {
     };
   }
 
-  if (body.mutedConversations !== undefined) {
-    const raw = Array.isArray(body.mutedConversations) ? body.mutedConversations : [];
-    updates.mutedConversations = raw
-      .filter(id => mongoose.isValidObjectId(id))
-      .slice(0, 200);
-  }
-
-  if (typeof body.pushEnabled === 'boolean') updates.pushEnabled = body.pushEnabled;
-  if (typeof body.smsEnabled === 'boolean') updates.smsEnabled = body.smsEnabled;
-
   return { updates };
 };
 
@@ -165,12 +155,8 @@ router.get('/notifications/preferences', authMiddleware, async (req, res) => {
     res.json({
       success: true,
       preferences: prefs,
-      // Lets the UI explain why a switch does nothing yet instead of silently
-      // failing when a user turns push on.
       providers: {
-        email: !!process.env.EMAIL_USER,
-        push: false,
-        sms: false
+        email: !!process.env.EMAIL_USER
       }
     });
   } catch (error) {

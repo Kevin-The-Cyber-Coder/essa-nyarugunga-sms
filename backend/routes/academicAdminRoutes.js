@@ -33,7 +33,7 @@ router.get('/academic-admin/teachers-list', authMiddleware, requireRole(...STAFF
   respondList(res, teachers, { page, limit, total });
 });
 
-router.post('/academic-admin/create-teacher-credentials', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.post('/academic-admin/create-teacher-credentials', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { fullName, email, password, subject, phone } = req.body;
     if (await User.findOne({ email })) return res.status(400).json({ message: 'Email already exists' });
@@ -67,7 +67,7 @@ router.post('/academic-admin/create-teacher-credentials', authMiddleware, requir
   }
 });
 
-router.put('/academic-admin/teachers/:id', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.put('/academic-admin/teachers/:id', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { fullName, email, subject, phone } = req.body;
     const teacher = await TeacherProfile.findByIdAndUpdate(req.params.id, { fullName, email, subject, phone }, { new: true });
@@ -78,7 +78,7 @@ router.put('/academic-admin/teachers/:id', authMiddleware, requireRole('academic
   }
 });
 
-router.delete('/academic-admin/teachers/:id', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.delete('/academic-admin/teachers/:id', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const teacher = await TeacherProfile.findById(req.params.id);
     if (teacher?.userId) await User.findByIdAndDelete(teacher.userId);
@@ -126,7 +126,7 @@ const resolveTeacher = async (teacherId) => {
   return { ok: true, teacherId: teacher._id };
 };
 
-router.post('/academic-admin/classes', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.post('/academic-admin/classes', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { className, grade, academicYear, teacherId } = req.body;
     const teacher = await resolveTeacher(teacherId);
@@ -138,7 +138,7 @@ router.post('/academic-admin/classes', authMiddleware, requireRole('academic_adm
   }
 });
 
-router.put('/academic-admin/classes/:classId/assign-teacher', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.put('/academic-admin/classes/:classId/assign-teacher', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const teacher = await resolveTeacher(req.body.teacherId);
     if (!teacher.ok) return res.status(400).json({ message: teacher.message });
@@ -150,7 +150,7 @@ router.put('/academic-admin/classes/:classId/assign-teacher', authMiddleware, re
   }
 });
 
-router.delete('/academic-admin/classes/:id', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.delete('/academic-admin/classes/:id', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   await Class.findByIdAndDelete(req.params.id);
   res.json({ success: true });
 });
@@ -174,7 +174,7 @@ router.get('/academic-admin/students', authMiddleware, async (req, res) => {
 // Enrolment is an academic admin responsibility. Teachers were previously
 // allowed here, which let any teacher create a student account (and an SDMS
 // code) for a class they taught, bypassing the enrolment and records process.
-router.post('/academic-admin/students', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.post('/academic-admin/students', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const count = await Student.countDocuments();
     const studentId = `STU${new Date().getFullYear()}${String(count + 1).padStart(4, '0')}`;
@@ -216,7 +216,7 @@ router.post('/academic-admin/students', authMiddleware, requireRole('academic_ad
   }
 });
 
-router.delete('/academic-admin/students/:id', authMiddleware, requireRole('academic_admin', 'super_admin'), async (req, res) => {
+router.delete('/academic-admin/students/:id', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const student = await Student.findById(req.params.id);
     if (!student) return res.status(404).json({ message: 'Student not found' });

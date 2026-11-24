@@ -14,7 +14,7 @@ const router = express.Router();
 // previously checked only that some valid token was present, so any signed-in
 // account could read any child's permission slip by walking the id.
 const canViewPermission = (permission, userId, userRole) => {
-  if (userRole === 'super_admin' || userRole === 'discipline_admin') return true;
+  if (userRole === 'headmaster' || userRole === 'discipline_admin') return true;
   return String(permission.requesterId) === String(userId);
 };
 
@@ -35,7 +35,7 @@ const stripServerOwned = (body = {}) => {
 router.get('/permissions', authMiddleware, async (req, res) => {
   try {
     let permissions;
-    if (req.userRole === 'super_admin' || req.userRole === 'discipline_admin') {
+    if (req.userRole === 'headmaster' || req.userRole === 'discipline_admin') {
       permissions = await Permission.find().sort({ createdAt: -1 });
     } else {
       permissions = await Permission.find({ requesterId: req.userId }).sort({ createdAt: -1 });
@@ -60,7 +60,7 @@ router.post('/permissions', authMiddleware, async (req, res) => {
   }
 });
 
-router.put('/permissions/:id', authMiddleware, requireRole('discipline_admin', 'super_admin'), async (req, res) => {
+router.put('/permissions/:id', authMiddleware, requireRole('discipline_admin', 'headmaster'), async (req, res) => {
   try {
     const permission = await Permission.findByIdAndUpdate(
       req.params.id,
@@ -73,7 +73,7 @@ router.put('/permissions/:id', authMiddleware, requireRole('discipline_admin', '
   }
 });
 
-router.get('/super-admin/permissions', authMiddleware, requireRole('super_admin'), async (req, res) => {
+router.get('/headmaster/permissions', authMiddleware, requireRole('headmaster'), async (req, res) => {
   try {
     const permissions = await Permission.find().sort({ createdAt: -1 });
     res.json(permissions);

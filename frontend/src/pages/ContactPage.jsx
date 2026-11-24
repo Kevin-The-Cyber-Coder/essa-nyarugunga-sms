@@ -282,7 +282,7 @@ const ContactPage = () => {
                 <i className="fab fa-whatsapp"></i>
                 <div>
                   <span>WhatsApp</span>
-                  <small>Chat with us now</small>
+                  <small>Message us on WhatsApp</small>
                 </div>
               </button>
             </div>

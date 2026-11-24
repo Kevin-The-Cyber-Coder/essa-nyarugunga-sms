@@ -3,25 +3,8 @@ const Student = require('../models/Student');
 const Class = require('../models/Class');
 const SubjectAllocation = require('../models/SubjectAllocation');
 const ParentProfile = require('../models/ParentProfile');
-const Block = require('../models/Block');
 
 const toId = (v) => String(v);
-
-// Everyone a caller has a block against, in either direction. A block is
-// mutual for contact purposes: whoever placed it, neither party should appear
-// in the other's picker or be reachable by starting a thread.
-const blockedUserIds = async (userId) => {
-  const rows = await Block.find({ $or: [{ blockerId: userId }, { blockedId: userId }] })
-    .select('blockerId blockedId')
-    .lean();
-  const ids = new Set();
-  for (const row of rows) {
-    ids.add(toId(row.blockerId));
-    ids.add(toId(row.blockedId));
-  }
-  ids.delete(toId(userId));
-  return [...ids];
-};
 
 // A single student's results are personal data, so read access has to follow
 // the relationship rather than mere authentication. Otherwise any logged-in
@@ -30,7 +13,10 @@ const blockedUserIds = async (userId) => {
 const authorizeStudentAccess = async (req, student) => {
   const { userId, userRole } = req;
 
-  if (userRole === 'super_admin' || userRole === 'academic_admin') return true;
+  // Teachers are staff, but their access is limited to students in classes
+  // they teach or have a subject allocation for (handled below). Only school
+  // administrators get unrestricted access to an individual student's record.
+  if (isAdminRole(userRole)) return true;
 
   if (userRole === 'student') {
     const own = await Student.findOne({ userId }).select('_id');
@@ -76,14 +62,17 @@ const teacherOwnsClass = async (userId, classId) => {
 // Roles that oversee the whole school rather than a slice of it. Kept in one
 // place because the student and class scopes and several route guards all need
 // the same definition of "staff".
-const STAFF_ROLES = ['super_admin', 'academic_admin', 'accounts_admin', 'discipline_admin'];
+const { ADMIN_ROLES, STAFF_ROLES } = require('../config/roles');
 const isStaff = (role) => STAFF_ROLES.includes(role);
+const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 
 // The class ids a caller is entitled to see: the classes they teach, or the
 // classes their children or their own record are enrolled in. Staff roles get
 // null, meaning "no restriction", which the callers turn into an empty filter.
 const allowedClassIds = async (userId, userRole) => {
-  if (isStaff(userRole)) {
+  // Same distinction as above: teachers are staff but only see the classes
+  // they teach; school administrators see the whole school.
+  if (isAdminRole(userRole)) {
     return null;
   }
 
@@ -146,118 +135,13 @@ const classScopeFilter = async (userId, userRole) => {
   return ids === null ? {} : { _id: { $in: ids } };
 };
 
-// The set of people a caller is allowed to start a conversation with, plus
-// whether their email may be included.
-//
-// /messages/users previously returned every active account - full name, email
-// and role - to anybody who was merely signed in. That let a parent read the
-// name and email of every pupil in the school, and a pupil read every parent,
-// which is not something either role needs in order to message their own
-// teacher. Staff still see everyone, because oversight is their job.
-const messagingDirectory = async (userId, userRole) => {
-  const blocked = await blockedUserIds(userId);
-  const base = { isActive: true, _id: { $ne: userId, $nin: blocked } };
-
-  if (isStaff(userRole)) {
-    return { includeEmail: true, filter: base };
-  }
-
-  // Everyone in a leadership role stays reachable from any portal, so a
-  // student or parent can always escalate.
-  const leadership = { role: { $in: STAFF_ROLES } };
-
-  if (userRole === 'teacher') {
-    const ids = await allowedClassIds(userId, userRole);
-    // classId lives on Student, not on User. Filtering the users collection by
-    // it (as this did before) matched nothing, so a teacher's message directory
-    // listed no pupils at all even for classes they teach.
-    const students = ids.length
-      ? await Student.find({ classId: { $in: ids } }).select('_id userId').lean()
-      : [];
-    const classmates = students.map(s => s.userId).filter(Boolean);
-    // Teachers also need to reach the guardians of the pupils they teach, so
-    // the directory includes the parent accounts linked to those students.
-    const studentIds = students.map(s => s._id);
-    const parentIds = studentIds.length
-      ? await ParentProfile.find({ children: { $in: studentIds } }).distinct('userId')
-      : [];
-    return {
-      includeEmail: false,
-      filter: {
-        ...base,
-        $or: [
-          leadership,
-          { role: 'teacher' },
-          { _id: { $in: classmates } },
-          { role: 'parent', _id: { $in: parentIds } }
-        ]
-      }
-    };
-  }
-
-  if (userRole === 'parent') {
-    const profile = await ParentProfile.findOne({ userId }).select('children');
-    const children = (profile && profile.children) || [];
-    const coParents = children.length
-      ? await ParentProfile.find({ children: { $in: children } }).distinct('userId')
-      : [];
-    // A guardian may message their own children directly as well.
-    const childUserIds = children.length
-      ? await Student.find({ _id: { $in: children } }).distinct('userId')
-      : [];
-    return {
-      includeEmail: false,
-      filter: {
-        ...base,
-        $or: [
-          leadership,
-          // Every teacher stays reachable. Staff names are not private, and a
-          // parent must be able to ask any of them about their child even when
-          // no class teacher has been assigned yet.
-          { role: 'teacher' },
-          { _id: { $in: coParents } },
-          { role: 'student', _id: { $in: childUserIds } }
-        ]
-      }
-    };
-  }
-
-  if (userRole === 'student') {
-    const own = await Student.findOne({ userId }).select('classId');
-    const classIds = own && own.classId ? [own.classId] : [];
-    const classmates = classIds.length
-      ? await Student.find({ classId: { $in: classIds } }).distinct('userId')
-      : [];
-    // Students may also message their own parent/guardian accounts.
-    const parentIds = own
-      ? await ParentProfile.find({ children: own._id }).distinct('userId')
-      : [];
-    return {
-      includeEmail: false,
-      filter: {
-        ...base,
-        $or: [
-          leadership,
-          { role: 'teacher' },
-          { _id: { $in: classmates } },
-          { role: 'parent', _id: { $in: parentIds } }
-        ]
-      }
-    };
-  }
-
-  // Unknown role gets leadership only rather than the whole school.
-  return { includeEmail: false, filter: { ...base, ...leadership } };
-};
-
 module.exports = {
   authorizeStudentAccess,
   teacherOwnsClass,
   studentScopeFilter,
   classScopeFilter,
   allowedClassIds,
-  messagingDirectory,
-  blockedUserIds,
   STAFF_ROLES,
-  isStaff
+  isStaff,
+  isAdminRole
 };

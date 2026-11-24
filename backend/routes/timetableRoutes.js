@@ -10,7 +10,7 @@ const { allowedClassIds, isStaff } = require('../utils/access');
 
 const router = express.Router();
 
-const manage = requireRole('academic_admin', 'super_admin');
+const manage = requireRole('academic_admin', 'headmaster');
 
 const DAYS = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
 

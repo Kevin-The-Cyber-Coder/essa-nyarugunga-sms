@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const ClassResource = require('../models/ClassResource');
 const Class = require('../models/Class');
 const authMiddleware = require('../middleware/auth');
-const { teacherOwnsClass, allowedClassIds, isStaff } = require('../utils/access');
+const { teacherOwnsClass, allowedClassIds, isAdminRole } = require('../utils/access');
 const { notifyClass } = require('../utils/classNotify');
 
 const router = express.Router();
@@ -17,7 +17,7 @@ const validId = (id) => mongoose.isValidObjectId(id);
 // empty list, so the caller knows the difference between "no resources" and
 // "not yours".
 const canViewClass = async (req, classId) => {
-  if (isStaff(req.userRole)) return true;
+  if (isAdminRole(req.userRole)) return true;
   if (req.userRole === 'teacher') return teacherOwnsClass(req.userId, classId);
   const ids = await allowedClassIds(req.userId, req.userRole);
   return Array.isArray(ids) && ids.some((id) => String(id) === String(classId));
@@ -45,7 +45,7 @@ router.post('/classes/:classId/resources', authMiddleware, async (req, res) => {
     const { classId } = req.params;
     if (!validId(classId)) return fail(res, 400, 'Invalid class id.');
 
-    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'headmaster';
     if (!isAdmin && !(req.userRole === 'teacher' && await teacherOwnsClass(req.userId, classId))) {
       return fail(res, 403, 'You can only add resources to classes you teach.');
     }
@@ -93,7 +93,7 @@ router.delete('/classes/:classId/resources/:id', authMiddleware, async (req, res
     const resource = await ClassResource.findOne({ _id: id, classId });
     if (!resource) return fail(res, 404, 'Resource not found.');
 
-    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'headmaster';
     const isUploader = String(resource.uploadedBy) === String(req.userId);
     const ownsClass = req.userRole === 'teacher' && await teacherOwnsClass(req.userId, classId);
     if (!isAdmin && !isUploader && !ownsClass) {

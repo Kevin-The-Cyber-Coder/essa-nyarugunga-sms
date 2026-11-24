@@ -19,13 +19,14 @@ const NewsPage = () => {
   const [viewMode, setViewMode] = useState('grid');
   const itemsPerPage = 6;
 
+  // Matches the CMS categories in config/roles.js so anything published by an
+  // authorized dashboard is reachable from the public site.
   const categories = [
     { id: 'all', name: 'All News', icon: 'fas fa-newspaper', color: '#1a3a5c', bgLight: '#e8f0fe' },
-    { id: 'achievement', name: 'Achievements', icon: 'fas fa-trophy', color: '#27ae60', bgLight: '#e8f5e9' },
-    { id: 'announcement', name: 'Announcements', icon: 'fas fa-bullhorn', color: '#e74c3c', bgLight: '#fdecea' },
-    { id: 'event', name: 'Events', icon: 'fas fa-calendar-alt', color: '#3498db', bgLight: '#e3f2fd' },
     { id: 'academic', name: 'Academic', icon: 'fas fa-graduation-cap', color: '#9b59b6', bgLight: '#f3e5f5' },
-    { id: 'sports', name: 'Sports', icon: 'fas fa-futbol', color: '#f39c12', bgLight: '#fff3e0' }
+    { id: 'discipline', name: 'Discipline', icon: 'fas fa-gavel', color: '#e74c3c', bgLight: '#fdecea' },
+    { id: 'financial', name: 'Financial', icon: 'fas fa-wallet', color: '#27ae60', bgLight: '#e8f5e9' },
+    { id: 'general', name: 'General', icon: 'fas fa-bullhorn', color: '#3498db', bgLight: '#e3f2fd' }
   ];
 
   useEffect(() => {

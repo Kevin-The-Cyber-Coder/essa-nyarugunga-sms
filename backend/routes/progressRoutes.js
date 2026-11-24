@@ -14,8 +14,8 @@ const { buildWeightIndex, averageFor, letterFor } = require('../utils/grading');
 
 const router = express.Router();
 
-const PROGRESS_ROLES = ['teacher', 'academic_admin', 'super_admin'];
-const isProgressStaff = (role) => role === 'academic_admin' || role === 'super_admin';
+const PROGRESS_ROLES = ['teacher', 'academic_admin', 'headmaster'];
+const isProgressStaff = (role) => role === 'academic_admin' || role === 'headmaster';
 
 // Everything below 50 is an F on the report card scale, so that is the line a
 // pupil has to stay above. Below 75% attendance is the other half of the risk

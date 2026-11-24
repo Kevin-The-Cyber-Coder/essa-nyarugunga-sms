@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';
-import io from 'socket.io-client';
-import ChatModal from "../components/ChatModal";
-import GroupedNav from '../components/GroupedNav';
+import Swal from 'sweetalert2';import GroupedNav from '../components/GroupedNav';
 import StudentQuizzesPanel from './StudentQuizzesPanel';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
@@ -17,7 +14,7 @@ const StudentDashboard = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [loading, setLoading] = useState(true);
-  
+
   // Data states
   const [dashboardData, setDashboardData] = useState(null);
   const [assignments, setAssignments] = useState([]);
@@ -27,13 +24,7 @@ const StudentDashboard = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [timetable, setTimetable] = useState([]);
   const [timetableDays, setTimetableDays] = useState([]);
-  
-  // Chat states
-  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
-  const [selectedChatUser, setSelectedChatUser] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [socket, setSocket] = useState(null);
-  
+
   const navigate = useNavigate();
   const getToken = () => localStorage.getItem('portalToken');
 
@@ -48,25 +39,15 @@ const StudentDashboard = () => {
   }, []);
 
   useEffect(() => {
-    const newSocket = io(API_URL, { auth: { token: getToken() } });
-    setSocket(newSocket);
-    const userId = localStorage.getItem('userId');
-    if (userId) newSocket.emit('join', userId);
-    newSocket.on('new_message', () => fetchUnreadCount());
-    return () => newSocket.disconnect();
-  }, []);
-
-  useEffect(() => {
     const token = getToken();
     const role = localStorage.getItem('userRole');
     const name = localStorage.getItem('userName');
-    
+
     if (!token || role !== 'student') {
       navigate('/portal/login');
     } else {
       setUserName(name || 'Student');
       fetchAllData();
-      fetchUnreadCount();
     }
   }, [navigate]);
 
@@ -92,7 +73,7 @@ const StudentDashboard = () => {
         // The timetable route resolves the student's own class server-side.
         apiRequest('/timetable').catch(() => null)
       ]);
-      
+
       setDashboardData(dashboard);
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
       setGrades(Array.isArray(gradesData) ? gradesData : []);
@@ -112,26 +93,6 @@ const StudentDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchUnreadCount = async () => {
-    try {
-      const data = await apiRequest('/messages/unread-count').catch(() => ({ count: 0 }));
-      setUnreadCount(data.count || 0);
-    } catch (error) {
-      console.error('Error fetching unread count:', error);
-    }
-  };
-
-  const handleOpenChat = (user = null) => {
-    if (user) setSelectedChatUser(user);
-    setIsChatModalOpen(true);
-  };
-
-  const handleCloseChat = () => {
-    setIsChatModalOpen(false);
-    setSelectedChatUser(null);
-    fetchUnreadCount();
   };
 
   // ==================== ASSIGNMENT SUBMISSION ====================
@@ -159,7 +120,7 @@ const StudentDashboard = () => {
         return content;
       }
     });
-    
+
     if (submittedContent) {
       try {
         await apiRequest(`/student/assignments/${assignment._id}/submit`, {
@@ -227,11 +188,6 @@ const StudentDashboard = () => {
     }
   };
 
-  // ==================== CONTACT TEACHER ====================
-  const handleContactTeacher = () => {
-    handleOpenChat({ name: 'Teacher', role: 'teacher', id: 'teacher' });
-  };
-
   const handleLogout = () => {
     localStorage.clear();
     navigate('/portal/login');
@@ -283,12 +239,6 @@ const StudentDashboard = () => {
       ]
     },
     {
-      id: 'g-comms', label: 'Communication', icon: 'fas fa-comments',
-      items: [
-        { id: 'chat', label: 'Messages', icon: 'fas fa-comments', badge: unreadCount },
-      ]
-    },
-    {
       id: 'g-account', label: 'My Account', icon: 'fas fa-user-circle',
       items: [
         { id: 'profile', label: 'Profile', icon: 'fas fa-user-circle' },
@@ -334,7 +284,7 @@ const StudentDashboard = () => {
         <GroupedNav
           groups={menuGroups}
           activeTab={activeTab}
-          onSelect={(id) => { setActiveTab(id); if (id === 'chat') handleOpenChat(); }}
+          onSelect={setActiveTab}
           expanded={!sidebarCollapsed}
           isMobile={isMobile}
           onNavigate={() => { if (isMobile) setMobileMenuOpen(false); }}
@@ -358,10 +308,6 @@ const StudentDashboard = () => {
           </div>
           <div className="top-bar-right">
             <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-            <div className="notification-bell" onClick={() => handleOpenChat()}>
-              <i className="fas fa-envelope"></i>
-              {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
-            </div>
             <div className="user-menu">
               <div className="user-avatar-small"><i className="fas fa-user-graduate"></i></div>
               <div className="user-details">
@@ -387,8 +333,6 @@ const StudentDashboard = () => {
         <div className="quick-actions">
           <button onClick={() => setActiveTab('assignments')} className="action-btn primary"><i className="fas fa-tasks"></i> View Assignments</button>
           <button onClick={handleRequestPermission} className="action-btn warning"><i className="fas fa-file-alt"></i> Request Permission</button>
-          <button onClick={handleContactTeacher} className="action-btn info"><i className="fas fa-chalkboard-user"></i> Contact Teacher</button>
-          <button onClick={() => handleOpenChat()} className="action-btn success"><i className="fas fa-comments"></i> Messages {unreadCount > 0 && `(${unreadCount})`}</button>
         </div>
 
         {/* Stats Grid */}
@@ -588,8 +532,6 @@ const StudentDashboard = () => {
           </div>
         )}
       </main>
-
-      <ChatModal isOpen={isChatModalOpen} onClose={handleCloseChat} recipient={selectedChatUser} onMessageSent={fetchUnreadCount} />
 
       <style>{`
         .student-dashboard { font-family: 'Inter', sans-serif; background: #f0f2f5; min-height: 100vh; }

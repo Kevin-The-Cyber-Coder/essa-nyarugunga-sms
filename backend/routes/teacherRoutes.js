@@ -38,7 +38,7 @@ router.get('/teacher/dashboard', authMiddleware, requireRole('teacher'), async (
 });
 
 // ==================== GRADES ====================
-router.get('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const grades = await Grade.find({ teacherId: req.userId }).populate('studentId', 'fullName studentId');
     res.json(grades);
@@ -47,7 +47,7 @@ router.get('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_a
   }
 });
 
-router.post('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.post('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { studentId, subject, score, term, year, assessmentId } = req.body;
     if (!studentId || !subject || score === undefined || !term || !year) {
@@ -62,7 +62,7 @@ router.post('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_
     if (!student) return res.status(404).json({ message: 'Student not found' });
 
     const { userRole } = req;
-    const isAdmin = userRole === 'super_admin' || userRole === 'academic_admin';
+    const isAdmin = userRole === 'headmaster' || userRole === 'academic_admin';
     if (!isAdmin && !(await authorizeStudentAccess(req, student))) {
       return res.status(403).json({ message: 'You are not assigned to this student' });
     }
@@ -98,7 +98,7 @@ router.post('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_
 });
 
 // ==================== ATTENDANCE ====================
-router.post('/teacher/attendance', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.post('/teacher/attendance', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { classId, date, records } = req.body;
     if (!classId || !Array.isArray(records) || !records.length) {
@@ -106,7 +106,7 @@ router.post('/teacher/attendance', authMiddleware, requireRole('teacher', 'acade
     }
 
     // Class-wide write, so authorise the class rather than each student.
-    if (req.userRole !== 'super_admin' && req.userRole !== 'academic_admin') {
+    if (req.userRole !== 'headmaster' && req.userRole !== 'academic_admin') {
       if (!(await teacherOwnsClass(req.userId, classId))) {
         return res.status(403).json({ message: 'You are not assigned to this class' });
       }
@@ -151,7 +151,7 @@ router.get('/teacher/attendance', authMiddleware, requireRole('teacher'), async 
 });
 
 // ==================== ASSIGNMENTS ====================
-router.get('/teacher/assignments', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/assignments', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     let query = {};
     if (req.userRole === 'teacher') {
@@ -164,7 +164,7 @@ router.get('/teacher/assignments', authMiddleware, requireRole('teacher', 'acade
   }
 });
 
-router.post('/teacher/assignments', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), uploadAssignment.single('file'), async (req, res) => {
+router.post('/teacher/assignments', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), uploadAssignment.single('file'), async (req, res) => {
   try {
     const fileUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/assignments/${req.file.filename}` : null;
 
@@ -186,7 +186,7 @@ router.post('/teacher/assignments', authMiddleware, requireRole('teacher', 'acad
   }
 });
 
-router.put('/teacher/assignments/:id/grade', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.put('/teacher/assignments/:id/grade', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { studentId, score, feedback } = req.body;
     const points = parseFloat(score);
@@ -212,7 +212,7 @@ router.put('/teacher/assignments/:id/grade', authMiddleware, requireRole('teache
 });
 
 // ==================== LESSON PLANS ====================
-router.get('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     let query = {};
     if (req.userRole === 'teacher') {
@@ -225,7 +225,7 @@ router.get('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'acad
   }
 });
 
-router.post('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), uploadLesson.single('file'), async (req, res) => {
+router.post('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), uploadLesson.single('file'), async (req, res) => {
   try {
     const fileUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/lessons/${req.file.filename}` : null;
 
@@ -254,7 +254,7 @@ router.post('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'aca
 });
 
 // Teacher moves a plan from draft to submitted for academic admin review.
-router.put('/teacher/lesson-plans/:id/submit', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.put('/teacher/lesson-plans/:id/submit', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const plan = await LessonPlan.findById(req.params.id);
     if (!plan) return res.status(404).json({ message: 'Lesson plan not found' });
@@ -287,12 +287,12 @@ router.put('/teacher/lesson-plans/:id/submit', authMiddleware, requireRole('teac
 
 // Returns the student list for an exam, together with whatever marks already
 // exist, so the entry grid can be rendered in one request.
-router.get('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
 
-    const isAdmin = req.userRole === 'super_admin' || req.userRole === 'academic_admin';
+    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
     if (!isAdmin) {
       // The exam names its classes; the teacher must be responsible for at
       // least one of them, otherwise the grid would expose other classes.
@@ -335,7 +335,7 @@ router.get('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher'
 // Absent scores are treated as "not sat" and stored as null rather than 0, so a
 // student who missed the paper is not silently given a zero and ranked last.
 // A real 0 (they sat it and scored nothing) is preserved.
-router.post('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.post('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.examId);
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
@@ -348,7 +348,7 @@ router.post('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher
       return res.status(400).json({ message: 'marks must be an array' });
     }
 
-    const isAdmin = req.userRole === 'super_admin' || req.userRole === 'academic_admin';
+    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
     if (!isAdmin) {
       const owned = await Promise.all(exam.classIds.map(id => teacherOwnsClass(req.userId, id)));
       if (!owned.some(Boolean)) {
@@ -414,14 +414,14 @@ router.post('/teacher/exams/:examId/marks', authMiddleware, requireRole('teacher
 // people, so this reuses utils/grading.js rather than re-deriving an average
 // here. A teacher who sees a different figure in the gradebook than appears on
 // a report card has no way to reconcile the two.
-router.get('/teacher/gradebook', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/gradebook', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { classId, term, year, subject } = req.query;
     if (!term || !year) return res.status(400).json({ message: 'term and year are required' });
 
     let classes;
     if (classId) {
-      const isAdmin = req.userRole === 'super_admin' || req.userRole === 'academic_admin';
+      const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
       if (!isAdmin && !(await teacherOwnsClass(req.userId, classId))) {
         return res.status(403).json({ message: 'You are not assigned to this class' });
       }
@@ -574,12 +574,12 @@ router.get('/teacher/gradebook', authMiddleware, requireRole('teacher', 'academi
 // already exists. The plain find() above omits students with no record, so a
 // register built from it would silently shrink as the day filled in and give no
 // way to tell "absent" from "nobody has got to this row yet".
-router.get('/teacher/attendance/register', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/attendance/register', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { classId, date } = req.query;
     if (!classId) return res.status(400).json({ message: 'classId is required' });
 
-    const isAdmin = req.userRole === 'super_admin' || req.userRole === 'academic_admin';
+    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
     if (!isAdmin && !(await teacherOwnsClass(req.userId, classId))) {
       return res.status(403).json({ message: 'You are not assigned to this class' });
     }
@@ -620,12 +620,12 @@ router.get('/teacher/attendance/register', authMiddleware, requireRole('teacher'
 // Chronic-absence reporting. Scope is an explicit date range rather than a term
 // because Attendance carries no term field, and guessing term boundaries from
 // the academic year would silently misreport anyone marked outside the window.
-router.get('/teacher/attendance/analytics', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.get('/teacher/attendance/analytics', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { classId, from, to, threshold } = req.query;
     if (!classId) return res.status(400).json({ message: 'classId is required' });
 
-    const isAdmin = req.userRole === 'super_admin' || req.userRole === 'academic_admin';
+    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
     if (!isAdmin && !(await teacherOwnsClass(req.userId, classId))) {
       return res.status(403).json({ message: 'You are not assigned to this class' });
     }
@@ -715,7 +715,7 @@ router.get('/teacher/attendance/analytics', authMiddleware, requireRole('teacher
 router.get('/teacher/attendance/:classId', authMiddleware, async (req, res) => {
   try {
     const { date } = req.query;
-    const isAdmin = req.userRole === 'super_admin' || req.userRole === 'academic_admin';
+    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
     if (!isAdmin && !(await teacherOwnsClass(req.userId, req.params.classId))) {
       return res.status(403).json({ message: 'You are not assigned to this class' });
     }
@@ -739,13 +739,13 @@ router.get('/teacher/attendance/:classId', authMiddleware, async (req, res) => {
 // teacher only the ones they set. The audience is the class's pupils and their
 // guardians, resolved by the same helper the reminder scheduler uses so the
 // manual and automatic paths reach exactly the same people.
-router.post('/teacher/assignments/:id/remind', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.post('/teacher/assignments/:id/remind', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id).select('title dueDate classId teacherId');
     if (!assignment) return res.status(404).json({ message: 'Assignment not found' });
     if (!assignment.classId) return res.status(400).json({ message: 'This assignment is not tied to a class.' });
 
-    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'headmaster';
     if (!isAdmin && String(assignment.teacherId) !== String(req.userId)) {
       return res.status(403).json({ message: 'You did not set this assignment.' });
     }
@@ -771,7 +771,7 @@ router.post('/teacher/assignments/:id/remind', authMiddleware, requireRole('teac
 
 // Broadcasts exam details to every class sitting it. A teacher must share at
 // least one of those classes; admins may send to any.
-router.post('/teacher/exams/:id/announce', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.post('/teacher/exams/:id/announce', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id).select('name type examDate instructions classIds');
     if (!exam) return res.status(404).json({ message: 'Exam not found' });
@@ -779,7 +779,7 @@ router.post('/teacher/exams/:id/announce', authMiddleware, requireRole('teacher'
     const classIds = (exam.classIds || []).map(String);
     if (!classIds.length) return res.status(400).json({ message: 'This exam is not assigned to any class.' });
 
-    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'headmaster';
     if (!isAdmin) {
       const owned = await Promise.all(classIds.map((id) => teacherOwnsClass(req.userId, id)));
       if (!owned.some(Boolean)) return res.status(403).json({ message: 'You do not teach any of the classes sitting this exam.' });
@@ -806,7 +806,7 @@ router.post('/teacher/exams/:id/announce', authMiddleware, requireRole('teacher'
 
 // A per-student academic note. Goes to the pupil and, in the same breath, to
 // their guardians, because feedback a parent never sees is half-delivered.
-router.post('/teacher/feedback', authMiddleware, requireRole('teacher', 'academic_admin', 'super_admin'), async (req, res) => {
+router.post('/teacher/feedback', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
     const { studentId, subject, title, message } = req.body;
     const note = String(message || '').trim();
@@ -815,7 +815,7 @@ router.post('/teacher/feedback', authMiddleware, requireRole('teacher', 'academi
     const student = await Student.findById(studentId).select('_id fullName userId classId');
     if (!student) return res.status(404).json({ message: 'Student not found' });
 
-    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'super_admin';
+    const isAdmin = req.userRole === 'academic_admin' || req.userRole === 'headmaster';
     if (!isAdmin && !(await authorizeStudentAccess(req, student))) {
       return res.status(403).json({ message: 'You are not assigned to this student.' });
     }

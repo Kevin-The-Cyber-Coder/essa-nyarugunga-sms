@@ -9,7 +9,7 @@ const { isStaff, allowedClassIds } = require('../utils/access');
 
 const router = express.Router();
 
-const manage = requireRole('academic_admin', 'super_admin');
+const manage = requireRole('academic_admin', 'headmaster');
 
 const withTeacher = async (allocations) => {
   const teacherIds = [...new Set(allocations.map(a => a.teacherId).filter(Boolean).map(String))];

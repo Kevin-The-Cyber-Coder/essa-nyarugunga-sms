@@ -93,13 +93,21 @@ router.post('/parent/verify-otp', publicFormLimiter, async (req, res) => {
     const valid = await Otp.verify(phone, otp, 'login');
     if (!valid) return res.status(401).json({ success: false, message: 'Invalid or expired code' });
 
-    const students = await Student.find({ parentPhone: phone });
+    let profile = await ParentProfile.findOne({ parentPhone: phone });
+
+    // An explicit staff-verified link always wins. Only fall back to the
+    // parentPhone on student records when no verified profile exists yet.
+    let students;
+    if (profile?.isLinked && profile.children?.length) {
+      students = await Student.find({ _id: { $in: profile.children } });
+    } else {
+      students = await Student.find({ parentPhone: phone });
+    }
     if (students.length === 0) {
       return res.status(404).json({ success: false, message: 'No matching student found for this phone number' });
     }
 
     const childIds = students.map(s => s._id);
-    let profile = await ParentProfile.findOne({ parentPhone: phone });
     if (!profile) {
       profile = await ParentProfile.create({ parentPhone: phone, parentName: students[0].parentName || 'Parent' });
     }

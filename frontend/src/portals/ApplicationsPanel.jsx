@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { openPrintableDocument } from '../utils/printDocument';
+import { ROLES, normalizeRole } from '../config/roles';
 
 const API_URL = import.meta.env.VITE_API_URL;
 const getToken = () => localStorage.getItem('portalToken');
@@ -10,22 +11,22 @@ const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: 
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const STATUS_META = {
-  pending:    { label: 'Pending',     color: '#7a4a00', bg: '#fff4e5' },
-  reviewing:  { label: 'Under Review', color: '#1d3f7a', bg: '#eef4ff' },
-  shortlisted:{ label: 'Shortlisted', color: '#7a5a00', bg: '#fffbe6' },
-  accepted:   { label: 'Accepted',    color: '#1b5e20', bg: '#e8f5e9' },
-  rejected:   { label: 'Rejected',    color: '#b91c1c', bg: '#fef2f2' },
-  waitlisted: { label: 'Waitlisted',  color: '#4a148c', bg: '#f3e5f5' }
+  submitted:    { label: 'Submitted',    color: '#7a4a00', bg: '#fff4e5' },
+  under_review: { label: 'Under review', color: '#1d3f7a', bg: '#eef4ff' },
+  approved:     { label: 'Approved',     color: '#1b5e20', bg: '#e8f5e9' },
+  rejected:     { label: 'Rejected',     color: '#b91c1c', bg: '#fef2f2' },
+  registered:   { label: 'Registered',   color: '#4a148c', bg: '#f3e5f5' }
 };
 
-const CHIP_STATUSES = ['pending', 'reviewing', 'accepted', 'rejected'];
+const CHIP_STATUSES = ['submitted', 'under_review', 'approved', 'rejected', 'registered'];
 
 const KPI_DEFS = [
-  { key: 'all',        label: 'Total',       icon: 'fas fa-file-alt',    accent: '#1a3a5c', bg: '#e8eef5' },
-  { key: 'pending',    label: 'Pending',     icon: 'fas fa-hourglass-half', accent: '#7a4a00', bg: '#fff4e5' },
-  { key: 'reviewing',  label: 'Under Review', icon: 'fas fa-eye',        accent: '#1d3f7a', bg: '#eef4ff' },
-  { key: 'accepted',   label: 'Accepted',    icon: 'fas fa-check-circle', accent: '#1b5e20', bg: '#e8f5e9' },
-  { key: 'rejected',   label: 'Rejected',    icon: 'fas fa-times-circle', accent: '#b91c1c', bg: '#fef2f2' }
+  { key: 'all',          label: 'Total',       icon: 'fas fa-file-alt',      accent: '#1a3a5c', bg: '#e8eef5' },
+  { key: 'submitted',    label: 'Submitted',   icon: 'fas fa-hourglass-half', accent: '#7a4a00', bg: '#fff4e5' },
+  { key: 'under_review', label: 'Under review', icon: 'fas fa-eye',          accent: '#1d3f7a', bg: '#eef4ff' },
+  { key: 'approved',     label: 'Approved',    icon: 'fas fa-check-circle',  accent: '#1b5e20', bg: '#e8f5e9' },
+  { key: 'rejected',     label: 'Rejected',    icon: 'fas fa-times-circle',  accent: '#b91c1c', bg: '#fef2f2' },
+  { key: 'registered',   label: 'Registered',  icon: 'fas fa-user-check',    accent: '#4a148c', bg: '#f3e5f5' }
 ];
 
 const RUBRIC = [
@@ -155,7 +156,7 @@ const ReviewerChip = ({ user }) => {
         color: 'var(--navy)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 10, fontWeight: 700
       }}>{initialsOf(user.name)}</span>
-      {String(user.name || '').split(' ')[0]}
+      {String(user.fullName || user.name || '').split(' ')[0]}
     </span>
   );
 };
@@ -208,12 +209,14 @@ const draftFor = (application) => Object.fromEntries(
   ])
 );
 
-const decisionFor = (application) =>
-  application?.status === 'pending' ? 'shortlisted' : application?.status;
+const decisionFor = (application, role) => {
+  if (role === ROLES.HEADMASTER) return application?.status === 'under_review' ? 'approved' : application?.status;
+  return application?.status === 'submitted' ? 'under_review' : application?.status;
+};
 
-const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onPrint, saving }) => {
+const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onPrint, saving, role, decisions }) => {
   const [draft, setDraft] = useState(() => draftFor(application));
-  const [decision, setDecision] = useState(() => decisionFor(application));
+  const [decision, setDecision] = useState(() => decisionFor(application, role));
   const [note, setNote] = useState(() => application?.reviewNotes || '');
   const [notify, setNotify] = useState(true);
 
@@ -289,7 +292,7 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
               </div>
 
               <div style={sectionTitle}>Applicant</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+              <div className="resp-fields" style={{ gap: '0 14px' }}>
                 <Detail k="Date of birth" v={application.dateOfBirth ? new Date(application.dateOfBirth).toDateString() : ''} />
                 <Detail k="Nationality" v={application.nationality} />
                 <Detail k="Email" v={application.email} />
@@ -300,14 +303,14 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
               <Detail k="Address" v={application.address} />
 
               <div style={sectionTitle}>Academic background</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+              <div className="resp-fields" style={{ gap: '0 14px' }}>
                 <Detail k="Previous school" v={application.previousSchool} />
                 <Detail k="Previous average" v={`${application.lastAverage}%`} />
               </div>
               <Detail k="Achievements" v={application.achievements} />
 
               <div style={sectionTitle}>Parent / guardian</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 14px' }}>
+              <div className="resp-fields" style={{ gap: '0 14px' }}>
                 <Detail k="Name" v={application.parentName} />
                 <Detail k="Phone" v={application.parentPhone} />
                 <Detail k="Email" v={application.parentEmail} />
@@ -315,7 +318,7 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
               </div>
 
               <div style={sectionTitle}>Documents</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+              <div className="resp-fields">
                 {DOCUMENTS.map(doc => {
                   const url = application[doc.key];
                   return (
@@ -418,12 +421,14 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
           {tab === 'decision' && (
             <div>
               <div style={{ fontSize: 12, color: 'var(--text-faint)', marginBottom: 16 }}>
-                Recorded decisions email the applicant and are logged in the activity feed. The note below is for staff only.
+                {role === ROLES.HEADMASTER
+                  ? 'Your approval or rejection is final. The applicant is emailed and every step is logged.'
+                  : 'Mark the application as under review. The Headmaster makes the final decision.'}
               </div>
 
-              <div style={LABEL_STYLE}>OUTCOME</div>
+              <div style={LABEL_STYLE}>{role === ROLES.HEADMASTER ? 'FINAL DECISION' : 'REVIEW STATUS'}</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {['shortlisted', 'accepted', 'waitlisted', 'rejected'].map(status => {
+                {decisions.map(status => {
                   const meta = STATUS_META[status];
                   const active = decision === status;
                   return (
@@ -439,7 +444,7 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
                         color: active ? meta.color : 'var(--text-secondary)'
                       }}
                     >
-                      <i className={`fas fa-${status === 'accepted' ? 'check' : status === 'rejected' ? 'times' : status === 'shortlisted' ? 'star' : 'hourglass-half'}`} style={{ marginRight: 8 }} />
+                      <i className={`fas fa-${status === 'approved' ? 'check' : status === 'rejected' ? 'times' : 'eye'}`} style={{ marginRight: 8 }} />
                       {meta.label}
                     </button>
                   );
@@ -470,12 +475,12 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
                   fontWeight: 600, fontSize: 13, cursor: saving ? 'wait' : 'pointer', fontFamily: 'inherit'
                 }}
               >
-                {saving ? 'Saving…' : notify ? 'Save & notify applicant' : 'Save decision'}
+                {saving ? 'Saving…' : role === ROLES.HEADMASTER ? 'Save final decision' : 'Start review'}
               </button>
 
               {application.reviewedBy && (
                 <div style={{ marginTop: 16, padding: 13, borderRadius: 10, background: 'var(--surface-muted)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Last decided by <strong>{application.reviewedBy.name}</strong> on {fullDate(application.reviewedAt)}
+                  Last decided by <strong>{application.reviewedBy.fullName || application.reviewedBy.name}</strong> on {fullDate(application.reviewedAt)}
                 </div>
               )}
             </div>
@@ -488,7 +493,14 @@ const Drawer = ({ application, tab, setTab, onClose, onSaveScores, onDecide, onP
 
 // ─── panel ────────────────────────────────────────────────────────────────────
 
-const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
+const ApplicationsPanel = ({ refreshSignal, onCountChange, role: roleProp }) => {
+  const role = normalizeRole(roleProp || localStorage.getItem('userRole'));
+  const isHeadmaster = role === ROLES.HEADMASTER;
+  const isAssistant = role === ROLES.ADMIN_ASSISTANT;
+  const decisions = isHeadmaster ? ['approved', 'rejected'] : ['under_review'];
+  const canDecideRow = (app) => isHeadmaster
+    ? app.status === 'under_review'
+    : isAssistant && app.status === 'submitted';
   const navigate = useNavigate();
 
   const [data, setData] = useState({ applications: [], total: 0, page: 1, pages: 1, limit: 10, counts: {}, levels: [] });
@@ -527,7 +539,7 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
 
-      const res = await fetch(`${API_URL}/api/academic-admin/applications?${params}`, { headers: authHeaders() });
+      const res = await fetch(`${API_URL}/api/admissions-admin/applications?${params}`, { headers: authHeaders() });
       if (res.status === 401) { navigate('/portal/login'); return; }
       const body = await res.json();
       if (!res.ok) throw new Error(body.message || 'Could not load applications');
@@ -560,7 +572,7 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
 
   const loadActivity = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/academic-admin/applications/activity?limit=10`, { headers: authHeaders() });
+      const res = await fetch(`${API_URL}/api/admissions-admin/applications/activity?limit=10`, { headers: authHeaders() });
       if (!res.ok) return;
       const body = await res.json();
       setActivity(body.activity || []);
@@ -603,7 +615,7 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
           comment: value.comment || ''
         }])
       );
-      const res = await fetch(`${API_URL}/api/academic-admin/applications/${open._id}/score`, {
+      const res = await fetch(`${API_URL}/api/admissions-admin/applications/${open._id}/score`, {
         method: 'PUT', headers: authHeaders(), body: JSON.stringify({ rubric })
       });
       const body = await res.json();
@@ -620,9 +632,13 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
   };
 
   const decide = async (next, note, notify) => {
+    if (!decisions.includes(next)) {
+      Swal.fire('Not allowed', 'Your role cannot make that decision.', 'warning');
+      return;
+    }
     setSaving(true);
     try {
-      const res = await fetch(`${API_URL}/api/academic-admin/applications/${open._id}/status`, {
+      const res = await fetch(`${API_URL}/api/admissions-admin/applications/${open._id}/status`, {
         method: 'PUT', headers: authHeaders(),
         body: JSON.stringify({ status: next, reviewNotes: note, notify })
       });
@@ -652,6 +668,10 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
   // always sees the profile and scores before committing an outcome.
 
   const bulkStatus = async (next) => {
+    if (!decisions.includes(next)) {
+      Swal.fire('Not allowed', 'Your role cannot make that decision.', 'warning');
+      return;
+    }
     const result = await Swal.fire({
       title: `Mark ${selected.length} application${selected.length === 1 ? '' : 's'} as ${STATUS_META[next]?.label}?`,
       html: `<input id="bulk-note" class="swal2-input" placeholder="Decision reason (internal, optional)" />`,
@@ -663,7 +683,7 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`${API_URL}/api/academic-admin/applications/bulk-status`, {
+      const res = await fetch(`${API_URL}/api/admissions-admin/applications/bulk-status`, {
         method: 'PUT', headers: authHeaders(),
         body: JSON.stringify({ ids: selected, status: next, reviewNotes: result.value.note })
       });
@@ -711,7 +731,7 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
 
   const print = async (application) => {
     try {
-      await openPrintableDocument(`/academic-admin/applications/${application._id}/print`, API_URL, application.applicationNumber);
+      await openPrintableDocument(`/admissions-admin/applications/${application._id}/print`, API_URL, application.applicationNumber);
     } catch (err) {
       Swal.fire('Cannot print', err.message, 'error');
     }
@@ -954,8 +974,8 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                         <span className="app-actions-wide" style={{ display: 'flex', gap: 6 }}>
                           <ActionButton icon="fas fa-eye" label="View" onClick={() => { setOpen(app); setTab('profile'); }} />
-                          <ActionButton icon="fas fa-star" label="Score" tone="score" onClick={() => { setOpen(app); setTab('score'); }} />
-                          <ActionButton icon="fas fa-gavel" label="Decide" tone="decide" onClick={() => { setOpen(app); setTab('decision'); }} />
+                          {isAssistant && <ActionButton icon="fas fa-star" label="Score" tone="score" onClick={() => { setOpen(app); setTab('score'); }} />}
+                          {canDecideRow(app) && <ActionButton icon="fas fa-gavel" label={isHeadmaster ? 'Decide' : 'Review'} tone="decide" onClick={() => { setOpen(app); setTab('decision'); }} />}
                         </span>
                         <details className="app-actions-narrow" style={{ position: 'relative' }}>
                           <summary style={{ listStyle: 'none', cursor: 'pointer', padding: '5px 8px', border: '1px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -963,8 +983,8 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
                           </summary>
                           <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 9, boxShadow: '0 10px 28px rgba(0,0,0,.14)', padding: 5, zIndex: 40, minWidth: 150 }}>
                             <ActionButton icon="fas fa-eye" label="View" onClick={() => { setOpen(app); setTab('profile'); }} />
-                            <ActionButton icon="fas fa-star" label="Score" tone="score" onClick={() => { setOpen(app); setTab('score'); }} />
-                            <ActionButton icon="fas fa-gavel" label="Decide" tone="decide" onClick={() => { setOpen(app); setTab('decision'); }} />
+                            {isAssistant && <ActionButton icon="fas fa-star" label="Score" tone="score" onClick={() => { setOpen(app); setTab('score'); }} />}
+                            {canDecideRow(app) && <ActionButton icon="fas fa-gavel" label={isHeadmaster ? 'Decide' : 'Review'} tone="decide" onClick={() => { setOpen(app); setTab('decision'); }} />}
                             <ActionButton icon="fas fa-print" label="Print" onClick={() => print(app)} />
                           </div>
                         </details>
@@ -1036,9 +1056,13 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
         }}>
           <strong style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{selected.length} selected</strong>
           <span style={{ width: 1, height: 20, background: 'rgba(255,255,255,.22)' }} />
-          <ActionButton icon="fas fa-star" label="Shortlist" onClick={() => bulkStatus('shortlisted')} />
-          <ActionButton icon="fas fa-check" label="Accept" onClick={() => bulkStatus('accepted')} />
-          <ActionButton icon="fas fa-times" label="Reject" onClick={() => bulkStatus('rejected')} />
+          {isAssistant && <ActionButton icon="fas fa-eye" label="Start review" onClick={() => bulkStatus('under_review')} />}
+          {isHeadmaster && (
+            <>
+              <ActionButton icon="fas fa-check" label="Approve" onClick={() => bulkStatus('approved')} />
+              <ActionButton icon="fas fa-times" label="Reject" onClick={() => bulkStatus('rejected')} />
+            </>
+          )}
           <ActionButton icon="fas fa-file-csv" label="Export" onClick={exportCsv} />
           <button
             type="button"
@@ -1088,6 +1112,8 @@ const ApplicationsPanel = ({ refreshSignal, onCountChange }) => {
           onDecide={decide}
           onPrint={() => print(open)}
           saving={saving}
+          role={role}
+          decisions={decisions}
         />
       )}
     </div>

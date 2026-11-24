@@ -15,3 +15,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.local
+
+# Local pre-refactor backups; never publish source snapshots
+_refactor_backup_*/

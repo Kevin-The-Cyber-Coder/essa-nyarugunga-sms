@@ -706,7 +706,7 @@ const AdmissionsPage = () => {
                       <input type="checkbox" name="agreeTerms" checked={formData.agreeTerms} onChange={handleInputChange} />
                       <span className="checkbox-custom"></span>
                       <span className="checkbox-text">
-                        I confirm that the information provided is accurate and I agree to the <Link to="/terms">terms and conditions</Link>. <span className="required">*</span>
+                        I confirm that the information provided is accurate and I agree to the <Link to="/terms-of-use">terms and conditions</Link>. <span className="required">*</span>
                       </span>
                     </label>
                     {errors.agreeTerms && <span className="error-text"><i className="fas fa-exclamation-circle"></i> {errors.agreeTerms}</span>}

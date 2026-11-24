@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import io from 'socket.io-client';
 import { GradebookPanel } from './GradebookPanel';
 import { AttendancePanel } from './AttendancePanel';
 import { QuizBuilderPanel } from './QuizBuilderPanel';
@@ -11,37 +10,26 @@ import { PermissionRequestsPanel } from './PermissionRequestsPanel';
 import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
-import MessagingPanel from '../components/chat/MessagingPanel';
+import ClassResourcesPanel from '../components/resources/ClassResourcesPanel';
 
 const API_URL = import.meta.env.VITE_API_URL;
-const SOCKET_URL = API_URL;
 const getToken = () => localStorage.getItem('portalToken');
-const authHeaders = () => ({ 
-  'Content-Type': 'application/json', 
-  'Authorization': `Bearer ${getToken()}` 
+const authHeaders = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${getToken()}`
 });
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-RW', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour: '2-digit', minute: '2-digit' }) : '';
 
 const getFormattedDate = () => {
   const date = new Date();
   return date.toLocaleDateString('en-RW', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
-const roleBadge = (role) => {
-  const map = {
-    super_admin: { label: 'Super Admin', color: '#ffc107', bg:'var(--tint-amber)' },
-    academic_admin: { label: 'Academic Admin', color: '#27ae60', bg:'var(--tint-success)' },
-    discipline_admin: { label: 'Discipline Admin', color: '#e74c3c', bg:'var(--tint-danger)' },
-    accounts_admin: { label: 'Accounts Admin', color: '#3498db', bg:'var(--tint-primary)' },
-    teacher: { label: 'Teacher', color: '#9b59b6', bg:'var(--tint-purple)' },
-    student: { label: 'Student', color: '#1abc9c', bg:'var(--tint-info)' },
-    parent: { label: 'Parent', color: '#e67e22', bg:'var(--tint-warning)' },
-  };
-  return map[role] || { label: role || '—', color:'var(--text-secondary)', bg:'var(--surface-page)' };
-};
+// Escape text before putting it into SweetAlert's html option
+const escapeHtml = (str = '') =>
+  String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // ─── shared UI atoms ─────────────────────────────────────────────────────────
 const Badge = ({ text, color, bg, size = 11 }) => (
@@ -62,10 +50,10 @@ const Modal = ({ open, onClose, title, children, width = 520 }) => {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background:'var(--surface-card)', borderRadius: 16, width: '100%', maxWidth: width, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,.25)' }}>
-        <div style={{ padding: '18px 22px', borderBottom:'1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background:'var(--surface-card)', zIndex: 1, borderRadius: '16px 16px 0 0' }}>
-          <h3 style={{ margin: 0, fontSize: 16, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color:'var(--text-faint)', lineHeight: 1 }}>×</button>
+      <div style={{ background: 'var(--surface-card)', borderRadius: 16, width: '100%', maxWidth: width, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--surface-card)', zIndex: 1, borderRadius: '16px 16px 0 0' }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: 'var(--text-faint)', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ padding: '20px 22px' }}>{children}</div>
       </div>
@@ -75,19 +63,19 @@ const Modal = ({ open, onClose, title, children, width = 520 }) => {
 
 const Field = ({ label, children, required }) => (
   <div style={{ marginBottom: 14 }}>
-    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color:'var(--text-secondary)', marginBottom: 5, letterSpacing: 0.5 }}>
+    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 5, letterSpacing: 0.5 }}>
       {label?.toUpperCase()}{required && <span style={{ color: '#e74c3c' }}> *</span>}
     </label>
     {children}
   </div>
 );
 
-const inputStyle = { width: '100%', padding: '9px 12px', border:'1.5px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', transition: 'border-color .2s' };
+const inputStyle = { width: '100%', padding: '9px 12px', border: '1.5px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 14, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', transition: 'border-color .2s' };
 const Inp = (props) => <input {...props} style={{ ...inputStyle, ...props.style }}
-  onFocus={e => e.target.style.borderColor = '#1a3a5c'} onBlur={e => e.target.style.borderColor = '#e0e0e0'} />;
-const Sel = ({ children, ...props }) => <select {...props} style={{ ...inputStyle, background:'var(--surface-card)', ...props.style }}>{children}</select>;
+  onFocus={e => e.target.style.borderColor = '#1a3a5c'} onBlur={e => e.target.style.borderColor = ''} />;
+const Sel = ({ children, ...props }) => <select {...props} style={{ ...inputStyle, background: 'var(--surface-card)', ...props.style }}>{children}</select>;
 const Txt = (props) => <textarea {...props} style={{ ...inputStyle, resize: 'vertical', minHeight: 80, ...props.style }}
-  onFocus={e => e.target.style.borderColor = '#1a3a5c'} onBlur={e => e.target.style.borderColor = '#e0e0e0'} />;
+  onFocus={e => e.target.style.borderColor = '#1a3a5c'} onBlur={e => e.target.style.borderColor = ''} />;
 
 const Btn = ({ children, onClick, icon, color = '#1a3a5c', textColor = 'var(--on-solid)', small, danger, disabled, style: s }) => {
   const bg = danger ? '#e74c3c' : disabled ? '#ccc' : color;
@@ -101,37 +89,37 @@ const Btn = ({ children, onClick, icon, color = '#1a3a5c', textColor = 'var(--on
 };
 
 const StatCard = ({ icon, label, value, sub, accent = '#9b59b6', bg = '#f3e5f5', onClick }) => (
-  <div onClick={onClick} style={{ background:'var(--surface-card)', borderRadius: 16, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 12px rgba(0,0,0,.06)', cursor: onClick ? 'pointer' : 'default', transition: 'all 0.2s', border:'1px solid var(--surface-page)' }}
+  <div onClick={onClick} style={{ background: 'var(--surface-card)', borderRadius: 16, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 12px rgba(0,0,0,.06)', cursor: onClick ? 'pointer' : 'default', transition: 'all 0.2s', border: '1px solid var(--surface-page)' }}
     onMouseEnter={e => { if (onClick) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,.12)'; } }}
     onMouseLeave={e => { if (onClick) { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,.06)'; } }}>
     <div style={{ width: 50, height: 50, borderRadius: 14, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       <i className={icon} style={{ fontSize: 20, color: accent }} />
     </div>
     <div>
-      <div style={{ fontSize: 24, fontWeight: 700, color:'var(--navy)', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{value ?? '—'}</div>
-      <div style={{ fontSize: 12, color:'var(--text-faint)', marginTop: 3 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--navy)', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{value ?? '—'}</div>
+      <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 3 }}>{label}</div>
       {sub && <div style={{ fontSize: 11, color: accent, marginTop: 3, fontWeight: 600 }}>{sub}</div>}
     </div>
   </div>
 );
 
 const Table = ({ cols, rows, emptyMsg = 'No data found' }) => (
-  <div style={{ overflowX: 'auto', borderRadius: 10, border:'1px solid var(--surface-page)' }}>
+  <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--surface-page)' }}>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 500 }}>
       <thead>
-        <tr style={{ background:'var(--surface-muted)' }}>
-          {cols.map((c, i) => <th key={i} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color:'var(--text-faint)', letterSpacing: .8, borderBottom:'1px solid var(--border)', whiteSpace: 'nowrap' }}>{c.toUpperCase()}</th>)}
+        <tr style={{ background: 'var(--surface-muted)' }}>
+          {cols.map((c, i) => <th key={i} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-faint)', letterSpacing: .8, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{c.toUpperCase()}</th>)}
         </tr>
       </thead>
       <tbody>
         {rows.length === 0
-          ? <tr><td colSpan={cols.length} style={{ textAlign: 'center', padding: 36, color:'var(--text-faint-2)', fontSize: 13 }}>{emptyMsg}</td></tr>
-          : rows.map((row, i) => <tr key={i} style={{ borderBottom:'1px solid var(--surface-muted)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#fafbff'} onMouseLeave={e => e.currentTarget.style.background = ''}>{row}</tr>)}
+          ? <tr><td colSpan={cols.length} style={{ textAlign: 'center', padding: 36, color: 'var(--text-faint-2)', fontSize: 13 }}>{emptyMsg}</td></tr>
+          : rows.map((row, i) => <tr key={i} style={{ borderBottom: '1px solid var(--surface-muted)', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#fafbff'} onMouseLeave={e => e.currentTarget.style.background = ''}>{row}</tr>)}
       </tbody>
     </table>
   </div>
 );
-const TD = ({ children, style }) => <td style={{ padding: '10px 14px', fontSize: 13, color:'var(--text-body)', ...style }}>{children}</td>;
+const TD = ({ children, style }) => <td style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-body)', ...style }}>{children}</td>;
 
 // Offense categories
 const offenseCategories = {
@@ -183,7 +171,8 @@ const TeacherDashboard = () => {
   const [assignments, setAssignments] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [lessonPlans, setLessonPlans] = useState([]);
-  
+  const [resourceClassId, setResourceClassId] = useState('');
+
   // modals
   const [assignmentModal, setAssignmentModal] = useState(false);
   const [attendanceModal, setAttendanceModal] = useState(false);
@@ -194,7 +183,7 @@ const TeacherDashboard = () => {
   const [gradeScores, setGradeScores] = useState({});
   const [gradingId, setGradingId] = useState(null);
   const [remindingId, setRemindingId] = useState(null);
-  
+
   // forms
   const [assignmentForm, setAssignmentForm] = useState({
     title: '', description: '', classId: '', type: 'homework', dueDate: '', totalPoints: 100
@@ -206,17 +195,12 @@ const TeacherDashboard = () => {
   const [lessonForm, setLessonForm] = useState({
     title: '', topic: '', objectives: '', materials: '', shareWithStudents: true
   });
-  
+
   // file states
   const [assignmentFile, setAssignmentFile] = useState(null);
   const [lessonFile, setLessonFile] = useState(null);
-  
-  // messaging
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [unread, setUnread] = useState(0);
 
   const userName = localStorage.getItem('userName') || 'Teacher';
-  const userId = localStorage.getItem('userId');
 
   // responsive
   useEffect(() => {
@@ -224,43 +208,17 @@ const TeacherDashboard = () => {
     check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check);
   }, []);
 
-  // socket
-  useEffect(() => {
-    const token = getToken(); if (!token) return;
-    const sock = io(SOCKET_URL, { auth: { token } });
-    if (userId) sock.emit('join', userId);
-    sock.on('new_message', () => { fetchUnread(); });
-    sock.on('newMessage', () => { fetchUnread(); });
-    return () => sock.disconnect();
-  }, [userId]);
-
-  // auth + load
-  useEffect(() => {
-    const token = getToken(); 
-    const role = localStorage.getItem('userRole');
-    if (!token || role !== 'teacher') { 
-      navigate('/portal/login'); 
-      return; 
-    }
-    loadAll();
-  }, [navigate]);
-
   // ─── API ──────────────────────────────────────────────────────────
   const api = useCallback(async (path, opts = {}) => {
     const res = await fetch(`${API_URL}/api${path}`, { headers: authHeaders(), ...opts });
-    if (!res.ok) return Promise.reject(await res.json());
+    if (!res.ok) return Promise.reject(await res.json().catch(() => ({})));
     return res.json();
   }, []);
 
-  const loadAll = () => Promise.all([
-    fetchClasses(), fetchStudents(), fetchAssignments(), fetchAnnouncements(),
-    fetchLessonPlans(), fetchUnread()
-  ]).finally(() => setLoading(false));
-
-  const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => setClasses([]));
-  const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => setStudents([]));
-  const fetchAssignments = () => api('/teacher/assignments').then(d => setAssignments(Array.isArray(d) ? d : [])).catch(() => setAssignments([]));
-  const fetchAnnouncements = () => api('/announcements')
+  const fetchClasses = useCallback(() => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => setClasses([])), [api]);
+  const fetchStudents = useCallback(() => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => setStudents([])), [api]);
+  const fetchAssignments = useCallback(() => api('/teacher/assignments').then(d => setAssignments(Array.isArray(d) ? d : [])).catch(() => setAssignments([])), [api]);
+  const fetchAnnouncements = useCallback(() => api('/announcements')
     .then(d => {
       const list = Array.isArray(d) ? d : [];
       setAnnouncements(list);
@@ -268,11 +226,22 @@ const TeacherDashboard = () => {
         if (ann?._id) api(`/announcements/${ann._id}/read`, { method: 'PUT' }).catch(() => {});
       });
     })
-    .catch(() => setAnnouncements([]));
-  const fetchLessonPlans = () => api('/teacher/lesson-plans').then(d => setLessonPlans(Array.isArray(d) ? d : [])).catch(() => setLessonPlans([]));
-  
-  const fetchUnread = () => api('/messages/unread-count').then(d => setUnread(d.count || 0)).catch(() => {});
-  
+    .catch(() => setAnnouncements([])), [api]);
+  const fetchLessonPlans = useCallback(() => api('/teacher/lesson-plans').then(d => setLessonPlans(Array.isArray(d) ? d : [])).catch(() => setLessonPlans([])), [api]);
+
+  // auth + load
+  useEffect(() => {
+    const token = getToken();
+    const role = localStorage.getItem('userRole');
+    if (!token || role !== 'teacher') {
+      navigate('/portal/login');
+      return;
+    }
+    Promise.all([
+      fetchClasses(), fetchStudents(), fetchAssignments(), fetchAnnouncements(), fetchLessonPlans()
+    ]).finally(() => setLoading(false));
+  }, [navigate, fetchClasses, fetchStudents, fetchAssignments, fetchAnnouncements, fetchLessonPlans]);
+
   // Create Assignment with File Upload
   const createAssignment = async () => {
     if (!assignmentForm.title || !assignmentForm.classId || !assignmentForm.dueDate) {
@@ -291,23 +260,23 @@ const TeacherDashboard = () => {
       if (assignmentFile) {
         formData.append('file', assignmentFile);
       }
-      
+
       const token = getToken();
       const response = await fetch(`${API_URL}/api/teacher/assignments`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
-      
-      if (!response.ok) throw await response.json();
-      
+
+      if (!response.ok) throw await response.json().catch(() => ({}));
+
       Swal.fire('✅ Assignment Created!', 'Assignment published successfully', 'success');
       setAssignmentModal(false);
       setAssignmentForm({ title: '', description: '', classId: '', type: 'homework', dueDate: '', totalPoints: 100 });
       setAssignmentFile(null);
       fetchAssignments();
-    } catch (e) { 
-      Swal.fire('Error', e.message || 'Failed to create assignment', 'error'); 
+    } catch (e) {
+      Swal.fire('Error', e.message || 'Failed to create assignment', 'error');
     }
     finally { setSaving(false); }
   };
@@ -329,7 +298,7 @@ const TeacherDashboard = () => {
       inputPlaceholder: 'Write your academic feedback…',
       showCancelButton: true,
       confirmButtonText: 'Send',
-      confirmButtonColor: 'var(--navy)'
+      confirmButtonColor: '#1a3a5c'
     });
     if (!messageText || !messageText.trim()) return;
     try {
@@ -356,7 +325,7 @@ const TeacherDashboard = () => {
       Swal.fire('Missing Score', 'Enter a score before saving', 'warning');
       return;
     }
-    setGradingId(studentId);
+    setGradingId(String(studentId));
     try {
       await api(`/teacher/assignments/${gradeAssignment._id}/grade`, {
         method: 'PUT',
@@ -370,7 +339,7 @@ const TeacherDashboard = () => {
       setGradingId(null);
     }
   };
-  
+
   // Upload Lesson Plan with File
   const uploadLessonPlan = async () => {
     if (!lessonForm.title || !lessonForm.topic) {
@@ -388,27 +357,27 @@ const TeacherDashboard = () => {
       if (lessonFile) {
         formData.append('file', lessonFile);
       }
-      
+
       const token = getToken();
       const response = await fetch(`${API_URL}/api/teacher/lesson-plans`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
-      
-      if (!response.ok) throw await response.json();
-      
+
+      if (!response.ok) throw await response.json().catch(() => ({}));
+
       Swal.fire('✅ Lesson Plan Uploaded!', 'Materials shared with students', 'success');
       setLessonModal(false);
       setLessonForm({ title: '', topic: '', objectives: '', materials: '', shareWithStudents: true });
       setLessonFile(null);
       fetchLessonPlans();
-    } catch (e) { 
-      Swal.fire('Error', e.message || 'Failed to upload', 'error'); 
+    } catch (e) {
+      Swal.fire('Error', e.message || 'Failed to upload', 'error');
     }
     finally { setSaving(false); }
   };
-  
+
   const reportIncident = async () => {
     if (!disciplineForm.studentId || !disciplineForm.category || !disciplineForm.description) {
       Swal.fire('Missing Fields', 'Please fill all required fields', 'warning');
@@ -431,26 +400,26 @@ const TeacherDashboard = () => {
       Swal.fire('✅ Incident Reported!', 'Report sent to Discipline Admin', 'success');
       setDisciplineModal(false);
       setDisciplineForm({ studentId: '', category: '', description: '', incidentDate: new Date().toISOString().split('T')[0] });
-    } catch (e) { 
-      Swal.fire('Error', e.message || 'Failed to report', 'error'); 
+    } catch (e) {
+      Swal.fire('Error', e.message || 'Failed to report', 'error');
     }
     finally { setSaving(false); }
   };
-  
+
   const openAttendanceModal = (cls) => {
     const classStudents = students.filter(s => s.classId?._id === cls._id);
     const records = classStudents.map(s => ({ studentId: s._id, studentName: s.fullName, status: 'present' }));
     setAttendanceForm({ date: new Date().toISOString().split('T')[0], classId: cls._id, records });
     setAttendanceModal(true);
   };
-  
+
   const updateAttendanceStatus = (studentId, status) => {
     setAttendanceForm(prev => ({
       ...prev,
       records: prev.records.map(r => r.studentId === studentId ? { ...r, status } : r)
     }));
   };
-  
+
   const saveAttendance = async () => {
     if (!attendanceForm.classId || !attendanceForm.records.length) {
       Swal.fire('Missing Fields', 'Please mark attendance', 'warning');
@@ -461,16 +430,16 @@ const TeacherDashboard = () => {
       await api('/teacher/attendance', { method: 'POST', body: JSON.stringify(attendanceForm) });
       Swal.fire('✅ Attendance Saved!', 'Attendance recorded successfully', 'success');
       setAttendanceModal(false);
-    } catch (e) { 
-      Swal.fire('Error', e.message || 'Failed to save', 'error'); 
+    } catch (e) {
+      Swal.fire('Error', e.message || 'Failed to save', 'error');
     }
     finally { setSaving(false); }
   };
-  
+
   const pendingAssignments = assignments.filter(a => new Date(a.dueDate) > new Date()).length;
   const totalStudents = students.length;
   const today = getFormattedDate();
-  
+
   // Seven top-level domains; every feature below is reachable as a sub-item.
   const navGroups = [
     {
@@ -500,6 +469,7 @@ const TeacherDashboard = () => {
       id: 'g-resources', label: 'Resources', icon: 'fas fa-folder-open',
       items: [
         { id: 'materials', label: 'Study Materials', icon: 'fas fa-book' },
+        { id: 'class-resources', label: 'Class Resources', icon: 'fas fa-folder-open' },
       ]
     },
     {
@@ -512,7 +482,6 @@ const TeacherDashboard = () => {
       id: 'g-comms', label: 'Communication', icon: 'fas fa-comments',
       items: [
         { id: 'announcements', label: 'Class Notices', icon: 'fas fa-bullhorn' },
-        { id: 'messages', label: 'Messages', icon: 'fas fa-comments', badge: unread },
       ]
     },
     {
@@ -530,7 +499,7 @@ const TeacherDashboard = () => {
   const sideW = isMobile ? 0 : sidebarOpen ? 260 : 72;
 
   if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background:'linear-gradient(135deg,var(--navy-deep),var(--navy))', color:'var(--on-solid)', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'linear-gradient(135deg,var(--navy-deep),var(--navy))', color: 'var(--on-solid)', gap: 20 }}>
       <div style={{ width: 44, height: 44, border: '3px solid rgba(255,255,255,.15)', borderTopColor: '#ffc107', borderRadius: '50%', animation: 'spin .8s linear infinite' }} />
       <p style={{ margin: 0, fontSize: 16 }}>Loading Teacher Portal…</p>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -538,15 +507,13 @@ const TeacherDashboard = () => {
   );
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background:'var(--surface-navy-tint)', fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--surface-navy-tint)', fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         .tab-anim{animation:fadeIn .22s ease}
         ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:10px}
-        .sent-bubble{background:#1a3a5c;color:white;border-radius:18px 18px 4px 18px;padding:10px 15px;max-width:70%;align-self:flex-end;font-size:13px}
-        .recv-bubble{background:white;color:#333;border-radius:18px 18px 18px 4px;padding:10px 15px;max-width:70%;align-self:flex-start;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
         button, .btn-hover{cursor:pointer;transition:all 0.2s ease}
         button:hover, .btn-hover:hover{filter:brightness(1.05);transform:translateY(-1px)}
         @media(max-width:768px){.hide-mobile{display:none!important}}
@@ -555,10 +522,10 @@ const TeacherDashboard = () => {
       {isMobile && mobileOpen && <div onClick={() => setMobileOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 998 }} />}
 
       {/* ─── SIDEBAR ─── */}
-      <aside style={{ position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 999, width: isMobile ? (mobileOpen ? 260 : 0) : sideW, background:'linear-gradient(180deg,var(--navy-deep) 0%,var(--navy) 100%)', color:'var(--on-solid)', display: 'flex', flexDirection: 'column', transition: 'width .3s ease', overflow: 'hidden', boxShadow: '3px 0 20px rgba(0,0,0,.18)' }}>
+      <aside style={{ position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 999, width: isMobile ? (mobileOpen ? 260 : 0) : sideW, background: 'linear-gradient(180deg,var(--navy-deep) 0%,var(--navy) 100%)', color: 'var(--on-solid)', display: 'flex', flexDirection: 'column', transition: 'width .3s ease', overflow: 'hidden', boxShadow: '3px 0 20px rgba(0,0,0,.18)' }}>
         <div style={{ padding: '20px 16px', borderBottom: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'center', gap: 11, flexShrink: 0 }}>
           <div style={{ width: 38, height: 38, background: '#ffc107', borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <i className="fas fa-chalkboard-user" style={{ fontSize: 16, color:'var(--navy)' }} />
+            <i className="fas fa-chalkboard-user" style={{ fontSize: 16, color: 'var(--navy)' }} />
           </div>
           {(sidebarOpen || isMobile) && <div><div style={{ fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 600 }}>ESSA Portal</div><div style={{ fontSize: 10, opacity: .6, letterSpacing: 1 }}>TEACHER</div></div>}
           {!isMobile && <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(255,255,255,.4)', cursor: 'pointer', fontSize: 13, flexShrink: 0 }}><i className={`fas fa-chevron-${sidebarOpen ? 'left' : 'right'}`} /></button>}
@@ -576,7 +543,7 @@ const TeacherDashboard = () => {
           onNavigate={() => isMobile && setMobileOpen(false)}
         />
         <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,.08)', flexShrink: 0 }}>
-          <button onClick={() => { localStorage.clear(); navigate('/portal/login'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', background: 'rgba(231,76,60,.2)', border: '1px solid rgba(231,76,60,.3)', borderRadius: 9, color:'var(--tint-danger-line)', cursor: 'pointer', fontSize: 13, transition: 'all 0.2s' }}
+          <button onClick={() => { localStorage.clear(); navigate('/portal/login'); }} style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 12px', background: 'rgba(231,76,60,.2)', border: '1px solid rgba(231,76,60,.3)', borderRadius: 9, color: 'var(--tint-danger-line)', cursor: 'pointer', fontSize: 13, transition: 'all 0.2s' }}
             onMouseEnter={e => { e.currentTarget.style.background = 'rgba(231,76,60,.4)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'rgba(231,76,60,.2)'; e.currentTarget.style.transform = ''; }}>
             <i className="fas fa-sign-out-alt" style={{ fontSize: 13 }} />{(sidebarOpen || isMobile) && 'Logout'}
@@ -587,29 +554,23 @@ const TeacherDashboard = () => {
       {/* ─── MAIN ─── */}
       <main style={{ flex: 1, marginLeft: isMobile ? 0 : sideW, transition: 'margin-left .3s', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
         {/* Top bar */}
-        <div style={{ background:'var(--surface-card)', padding: '11px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom:'1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 1px 8px rgba(0,0,0,.05)' }}>
+        <div style={{ background: 'var(--surface-card)', padding: '11px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 1px 8px rgba(0,0,0,.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {isMobile && <button onClick={() => setMobileOpen(!mobileOpen)} style={{ background:'var(--navy)', color:'var(--on-solid)', border: 'none', padding: '7px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.2s' }}
+            {isMobile && <button onClick={() => setMobileOpen(!mobileOpen)} style={{ background: 'var(--navy)', color: 'var(--on-solid)', border: 'none', padding: '7px 10px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.2s' }}
               onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'}
               onMouseLeave={e => e.currentTarget.style.filter = ''}>
               <i className="fas fa-bars" />
             </button>}
             <div>
-              <div style={{ fontSize: 10, color:'var(--text-faint)', letterSpacing: .5 }}>ESSA NYARUGUNGA</div>
-              <div style={{ fontSize: 15, fontWeight: 600, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>{menuItems.find(m => m.id === activeTab)?.label || 'Dashboard'}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-faint)', letterSpacing: .5 }}>ESSA NYARUGUNGA</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>{menuItems.find(m => m.id === activeTab)?.label || 'Dashboard'}</div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-            {unread > 0 && <button onClick={() => setActiveTab('messages')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color:'var(--text-faint)', fontSize: 17, transition: 'all 0.2s' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#1a3a5c'}
-              onMouseLeave={e => e.currentTarget.style.color = '#888'}>
-              <i className="fas fa-bell" />
-              <span style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color:'var(--on-solid)', borderRadius: '50%', fontSize: 9, width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{unread}</span>
-            </button>}
             <Avatar name={userName} size={32} />
             <div className="hide-mobile">
-              <div style={{ fontSize: 12, fontWeight: 600, color:'var(--text-body)' }}>{userName}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-body)' }}>{userName}</div>
               <div style={{ fontSize: 10, color: '#ffc107' }}>TEACHER</div>
             </div>
           </div>
@@ -621,7 +582,7 @@ const TeacherDashboard = () => {
           {/* ══ OVERVIEW DASHBOARD ══ */}
           {activeTab === 'overview' && (
             <div>
-              <div style={{ background:'linear-gradient(135deg,var(--navy-deep),var(--navy))', borderRadius: 18, padding: '24px 28px', marginBottom: 22, color:'var(--on-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, boxShadow: '0 6px 24px rgba(26,58,92,.35)' }}>
+              <div style={{ background: 'linear-gradient(135deg,var(--navy-deep),var(--navy))', borderRadius: 18, padding: '24px 28px', marginBottom: 22, color: 'var(--on-solid)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, boxShadow: '0 6px 24px rgba(26,58,92,.35)' }}>
                 <div>
                   <div style={{ fontSize: 20, fontWeight: 600, fontFamily: 'Georgia, serif', marginBottom: 5 }}>Welcome back, {userName.split(' ')[0]}! 👨‍🏫</div>
                   <div style={{ fontSize: 12, opacity: .75 }}>{today}</div>
@@ -631,7 +592,7 @@ const TeacherDashboard = () => {
                   <Btn onClick={() => setLessonModal(true)} icon="fas fa-upload" color="rgba(255,255,255,.15)" textColor="var(--on-solid)">Upload Lesson</Btn>
                 </div>
               </div>
-              
+
               {/* Stats Cards */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14, marginBottom: 20 }}>
                 <StatCard icon="fas fa-school" label="My Classes" value={classes.length} sub="Assigned classes" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('classes')} />
@@ -639,27 +600,27 @@ const TeacherDashboard = () => {
                 <StatCard icon="fas fa-tasks" label="Pending Assignments" value={pendingAssignments} sub="Need grading" accent="#f39c12" bg="#fff3e0" onClick={() => setActiveTab('assignments')} />
                 <StatCard icon="fas fa-book" label="Lesson Plans" value={lessonPlans.length} sub="Uploaded" accent="#3498db" bg="#e3f2fd" onClick={() => setActiveTab('materials')} />
               </div>
-              
+
               {/* Quick Actions */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
                 <Btn onClick={() => setAssignmentModal(true)} icon="fas fa-tasks" color="#9b59b6">Create Assignment</Btn>
                 <Btn onClick={() => setDisciplineModal(true)} icon="fas fa-exclamation-triangle" color="#e74c3c">Report Issue</Btn>
                 <Btn onClick={() => setLessonModal(true)} icon="fas fa-book" color="#3498db">Upload Lesson</Btn>
               </div>
-              
+
               {/* Recent Announcements */}
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
+              <div style={{ background: 'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                  <h3 style={{ margin: 0, fontSize: 14, color:'var(--navy)', fontWeight: 600 }}><i className="fas fa-bullhorn" style={{ marginRight: 7, color: '#ffc107' }} />Recent Announcements</h3>
+                  <h3 style={{ margin: 0, fontSize: 14, color: 'var(--navy)', fontWeight: 600 }}><i className="fas fa-bullhorn" style={{ marginRight: 7, color: '#ffc107' }} />Recent Announcements</h3>
                   <Btn small onClick={() => setActiveTab('announcements')} color="#1a3a5c">View All</Btn>
                 </div>
                 {announcements.slice(0, 3).map(ann => (
-                  <div key={ann._id} style={{ padding: '10px 0', borderBottom:'1px solid var(--surface-muted)' }}>
+                  <div key={ann._id} style={{ padding: '10px 0', borderBottom: '1px solid var(--surface-muted)' }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{ann.title}</div>
-                    <div style={{ fontSize: 11, color:'var(--text-faint)', marginTop: 2 }}>{fmt(ann.createdAt)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>{fmt(ann.createdAt)}</div>
                   </div>
                 ))}
-                {announcements.length === 0 && <p style={{ textAlign: 'center', color:'var(--text-faint-2)', padding: 20 }}>No announcements yet</p>}
+                {announcements.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-faint-2)', padding: 20 }}>No announcements yet</p>}
               </div>
             </div>
           )}
@@ -667,18 +628,18 @@ const TeacherDashboard = () => {
           {/* ══ MY CLASSES ══ */}
           {activeTab === 'classes' && (
             <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>My Classes</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{classes.length} classes assigned</p></div>
+              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>My Classes</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{classes.length} classes assigned</p></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 16 }}>
                 {classes.map(cls => {
                   const classStudents = students.filter(s => s.classId?._id === cls._id);
                   return (
-                    <div key={cls._id} style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)', borderLeft: `4px solid #9b59b6`, transition: 'all 0.2s' }}
+                    <div key={cls._id} style={{ background: 'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)', borderLeft: '4px solid #9b59b6', transition: 'all 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
                       onMouseLeave={e => e.currentTarget.style.transform = ''}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                         <div>
-                          <h3 style={{ margin: 0, fontSize: 16, color:'var(--navy)' }}>{cls.grade} {cls.className}</h3>
-                          <p style={{ margin: '4px 0 0', fontSize: 11, color:'var(--text-faint)' }}>Academic Year: {cls.academicYear}</p>
+                          <h3 style={{ margin: 0, fontSize: 16, color: 'var(--navy)' }}>{cls.grade} {cls.className}</h3>
+                          <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>Academic Year: {cls.academicYear}</p>
                         </div>
                         <Badge text={`${classStudents.length} students`} color="#3498db" bg="#e3f2fd" />
                       </div>
@@ -689,7 +650,7 @@ const TeacherDashboard = () => {
                     </div>
                   );
                 })}
-                {classes.length === 0 && <div style={{ textAlign: 'center', padding: 50, background:'var(--surface-card)', borderRadius: 14, color:'var(--text-faint-2)' }}><i className="fas fa-school" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No classes assigned yet</div>}
+                {classes.length === 0 && <div style={{ textAlign: 'center', padding: 50, background: 'var(--surface-card)', borderRadius: 14, color: 'var(--text-faint-2)' }}><i className="fas fa-school" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No classes assigned yet</div>}
               </div>
             </div>
           )}
@@ -708,31 +669,35 @@ const TeacherDashboard = () => {
           {activeTab === 'assignments' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Assignments</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{assignments.length} total, {pendingAssignments} pending</p></div>
+                <div><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>Assignments</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{assignments.length} total, {pendingAssignments} pending</p></div>
                 <Btn onClick={() => setAssignmentModal(true)} icon="fas fa-plus" color="#9b59b6">Create Assignment</Btn>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {assignments.length === 0 && <div style={{ textAlign: 'center', padding: 50, background:'var(--surface-card)', borderRadius: 14, color:'var(--text-faint-2)' }}><i className="fas fa-tasks" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No assignments created yet</div>}
+                {assignments.length === 0 && <div style={{ textAlign: 'center', padding: 50, background: 'var(--surface-card)', borderRadius: 14, color: 'var(--text-faint-2)' }}><i className="fas fa-tasks" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No assignments created yet</div>}
                 {assignments.map(a => {
                   const isDue = new Date(a.dueDate) < new Date();
                   return (
-                    <div key={a._id} style={{ background:'var(--surface-card)', borderRadius: 12, padding: '16px 18px', borderLeft: `4px solid ${isDue ? '#e74c3c' : '#27ae60'}`, boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
+                    <div key={a._id} style={{ background: 'var(--surface-card)', borderRadius: 12, padding: '16px 18px', borderLeft: `4px solid ${isDue ? '#e74c3c' : '#27ae60'}`, boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.transform = 'translateX(2px)'}
                       onMouseLeave={e => e.currentTarget.style.transform = ''}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                         <div>
-                          <h3 style={{ margin: 0, fontSize: 14, color:'var(--navy)' }}>{a.title}</h3>
+                          <h3 style={{ margin: 0, fontSize: 14, color: 'var(--navy)' }}>{a.title}</h3>
                           <div style={{ display: 'flex', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
                             <Badge text={a.type} color="#9b59b6" bg="#f3e5f5" />
                             <Badge text={`Due: ${fmt(a.dueDate)}`} color={isDue ? '#e74c3c' : '#f39c12'} bg={isDue ? '#fdecea' : '#fff3e0'} />
                             <Badge text={`${a.totalPoints} pts`} color="#3498db" bg="#e3f2fd" />
                           </div>
                         </div>
-                        <Btn small icon="fas fa-eye" color="#3498db" onClick={() => Swal.fire({ title: a.title, html: `<p>${a.description || 'No description'}</p>${a.fileUrl ? `<a href="${a.fileUrl}" target="_blank">Download Attachment</a>` : ''}`, width: 500 })}>View</Btn>
+                        <Btn small icon="fas fa-eye" color="#3498db" onClick={() => Swal.fire({
+                          title: a.title,
+                          html: `<p>${escapeHtml(a.description) || 'No description'}</p>${a.fileUrl ? `<a href="${encodeURI(a.fileUrl)}" target="_blank" rel="noreferrer">Download Attachment</a>` : ''}`,
+                          width: 500
+                        })}>View</Btn>
                         <Btn small icon="fas fa-check-double" color="#27ae60" onClick={() => openGrading(a)}>Submissions ({(a.submissions || []).length})</Btn>
                         <Btn small icon={remindingId === a._id ? 'fas fa-spinner fa-spin' : 'fas fa-bell'} color="#f39c12" onClick={() => remindAssignment(a)}>{remindingId === a._id ? 'Sending…' : 'Remind'}</Btn>
                       </div>
-                      {a.description && <p style={{ margin: '8px 0 0', fontSize: 12, color:'var(--text-secondary)' }}>{a.description.substring(0, 100)}...</p>}
+                      {a.description && <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{a.description.substring(0, 100)}{a.description.length > 100 ? '...' : ''}</p>}
                     </div>
                   );
                 })}
@@ -743,16 +708,28 @@ const TeacherDashboard = () => {
           {/* ══ STUDENTS ══ */}
           {activeTab === 'students' && (
             <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>My Students</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{students.length} students enrolled</p></div>
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)', overflowX: 'auto' }}>
-                <Table cols={['Student', 'Class', 'Parent', 'Contact', 'Actions']} emptyMsg="No students found"
+              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>My Students</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{students.length} students enrolled</p></div>
+              <div style={{ background: 'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)', overflowX: 'auto' }}>
+                <Table
+                  cols={['Student', 'Class', 'Parent', 'Contact', 'Actions']}
+                  emptyMsg="No students found"
                   rows={students.map(s => (
-                    <><TD><div style={{ fontWeight: 600, fontSize: 13 }}>{s.fullName}</div><div style={{ fontSize: 11, color:'var(--text-faint)' }}>{s.studentId || ''}</div></TD>
-                      <TD>{s.classId ? <Badge text={`${s.classId.grade || ''} ${s.classId.className || ''}`} color="#3498db" bg="#e3f2fd" /> : '—'}</TD>
+                    <Fragment key={s._id || s.studentId}>
+                      <TD>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{s.fullName}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>{s.studentId || ''}</div>
+                      </TD>
+                      <TD>
+                        {s.classId
+                          ? <Badge text={`${s.classId.grade || ''} ${s.classId.className || ''}`.trim()} color="#3498db" bg="#e3f2fd" />
+                          : '—'}
+                      </TD>
                       <TD style={{ fontSize: 12 }}>{s.parentName || '—'}</TD>
                       <TD style={{ fontSize: 12 }}>{s.parentPhone || '—'}</TD>
-                      <TD><Btn small icon="fas fa-comment" color="#3498db" onClick={() => { setSelectedUser(s); setActiveTab('messages'); }}>Message</Btn>
-                        <Btn small icon="fas fa-comment-dots" color="#0e7490" onClick={() => sendFeedback(s)}>Feedback</Btn></TD></>
+                      <TD>
+                        <Btn small icon="fas fa-comment-dots" color="#0e7490" onClick={() => sendFeedback(s)}>Feedback</Btn>
+                      </TD>
+                    </Fragment>
                   ))}
                 />
               </div>
@@ -762,8 +739,8 @@ const TeacherDashboard = () => {
           {/* ══ DISCIPLINE (REPORT ISSUE) ══ */}
           {activeTab === 'discipline' && (
             <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Report Student Issue</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>Report misbehavior to Discipline Admin</p></div>
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 24, maxWidth: 600, margin: '0 auto', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
+              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>Report Student Issue</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>Report misbehavior to Discipline Admin</p></div>
+              <div style={{ background: 'var(--surface-card)', borderRadius: 14, padding: 24, maxWidth: 600, margin: '0 auto', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
                 <Field label="Student" required>
                   <Sel value={disciplineForm.studentId} onChange={e => setDisciplineForm(p => ({ ...p, studentId: e.target.value }))}>
                     <option value="">Select student…</option>
@@ -791,24 +768,45 @@ const TeacherDashboard = () => {
           {activeTab === 'materials' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Study Materials</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{lessonPlans.length} resources shared</p></div>
+                <div><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>Study Materials</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{lessonPlans.length} resources shared</p></div>
                 <Btn onClick={() => setLessonModal(true)} icon="fas fa-plus" color="#3498db">Upload Lesson Plan</Btn>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {lessonPlans.length === 0 && <div style={{ textAlign: 'center', padding: 50, background:'var(--surface-card)', borderRadius: 14, color:'var(--text-faint-2)' }}><i className="fas fa-book" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No study materials uploaded yet</div>}
+                {lessonPlans.length === 0 && <div style={{ textAlign: 'center', padding: 50, background: 'var(--surface-card)', borderRadius: 14, color: 'var(--text-faint-2)' }}><i className="fas fa-book" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No study materials uploaded yet</div>}
                 {lessonPlans.map(lp => (
-                  <div key={lp._id} style={{ background:'var(--surface-card)', borderRadius: 12, padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
+                  <div key={lp._id} style={{ background: 'var(--surface-card)', borderRadius: 12, padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
                     onMouseEnter={e => e.currentTarget.style.transform = 'translateX(2px)'}
                     onMouseLeave={e => e.currentTarget.style.transform = ''}>
-                    <h3 style={{ margin: 0, fontSize: 14, color:'var(--navy)' }}>{lp.title}</h3>
-                    <p style={{ margin: '5px 0 0', fontSize: 12, color:'var(--text-secondary)' }}>{lp.topic}</p>
+                    <h3 style={{ margin: 0, fontSize: 14, color: 'var(--navy)' }}>{lp.title}</h3>
+                    <p style={{ margin: '5px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{lp.topic}</p>
                     <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                       <Badge text={lp.shareWithStudents ? 'Shared with Students' : 'Draft'} color={lp.shareWithStudents ? '#27ae60' : '#f39c12'} bg={lp.shareWithStudents ? '#e8f5e9' : '#fff3e0'} />
-                      {lp.fileUrl && <Btn small icon="fas fa-download" color="#3498db" onClick={() => window.open(lp.fileUrl)}>Download</Btn>}
+                      {lp.fileUrl && <Btn small icon="fas fa-download" color="#3498db" onClick={() => window.open(lp.fileUrl, '_blank', 'noopener')}>Download</Btn>}
                     </div>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ══ CLASS RESOURCES ══ */}
+          {activeTab === 'class-resources' && (
+            <div>
+              <div style={{ marginBottom: 18 }}>
+                <h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>Class Resources</h2>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>Files and links for your classes. Students can open them from their portal.</p>
+              </div>
+              <div style={{ marginBottom: 16, maxWidth: 340 }}>
+                <select
+                  value={resourceClassId}
+                  onChange={e => setResourceClassId(e.target.value)}
+                  style={{ width: '100%', padding: '9px 10px', borderRadius: 9, border: '1.5px solid var(--surface-sunken-2)', background: 'var(--surface-card)', color: 'var(--text-body)', fontSize: 13, fontFamily: 'inherit' }}
+                >
+                  <option value="">Select a class…</option>
+                  {classes.map(c => <option key={c._id} value={c._id}>{c.grade} {c.className}</option>)}
+                </select>
+              </div>
+              <ClassResourcesPanel classId={resourceClassId} canManage />
             </div>
           )}
 
@@ -820,25 +818,25 @@ const TeacherDashboard = () => {
               {/* The school-wide feed stays: a teacher's own notices sit above
                   it, and the head's notices are still worth reading. */}
               <div style={{ margin: '26px 0 18px' }}>
-                <h2 style={{ margin: 0, fontSize: 17, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>School Announcements</h2>
-                <p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{announcements.length} for the whole school</p>
+                <h2 style={{ margin: 0, fontSize: 17, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>School Announcements</h2>
+                <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{announcements.length} for the whole school</p>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {announcements.length === 0 && <div style={{ textAlign: 'center', padding: 50, background:'var(--surface-card)', borderRadius: 14, color:'var(--text-faint-2)' }}><i className="fas fa-bullhorn" style={{ fontSize: 32, display: 'block', marginBottom: 10, opacity: .3 }} />No announcements yet</div>}
+                {announcements.length === 0 && <div style={{ textAlign: 'center', padding: 50, background: 'var(--surface-card)', borderRadius: 14, color: 'var(--text-faint-2)' }}><i className="fas fa-bullhorn" style={{ fontSize: 32, display: 'block', marginBottom: 10, opacity: .3 }} />No announcements yet</div>}
                 {announcements.map(ann => {
                   const pc = ann.priority === 'urgent' ? '#e74c3c' : ann.priority === 'high' ? '#f39c12' : '#27ae60';
                   return (
-                    <div key={ann._id} style={{ background:'var(--surface-card)', borderRadius: 12, padding: '15px 18px', borderLeft: `4px solid ${pc}`, boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
+                    <div key={ann._id} style={{ background: 'var(--surface-card)', borderRadius: 12, padding: '15px 18px', borderLeft: `4px solid ${pc}`, boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
                       onMouseEnter={e => e.currentTarget.style.transform = 'translateX(2px)'}
                       onMouseLeave={e => e.currentTarget.style.transform = ''}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-                        <h3 style={{ margin: 0, fontSize: 14, color:'var(--navy)' }}>{ann.title}</h3>
+                        <h3 style={{ margin: 0, fontSize: 14, color: 'var(--navy)' }}>{ann.title}</h3>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                           <Badge text={ann.priority} color={pc} bg={pc + '22'} />
-                          <span style={{ fontSize: 11, color:'var(--text-faint)' }}>{fmt(ann.createdAt)}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fmt(ann.createdAt)}</span>
                         </div>
                       </div>
-                      <p style={{ margin: '8px 0 0', fontSize: 13, color:'var(--text-2)', lineHeight: 1.6 }}>{ann.content}</p>
+                      <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{ann.content}</p>
                     </div>
                   );
                 })}
@@ -846,22 +844,17 @@ const TeacherDashboard = () => {
             </div>
           )}
 
-          {/* ══ MESSAGES ══ */}
-          {activeTab === 'messages' && (
-            <MessagingPanel recipient={selectedUser || undefined} onMessageSent={fetchUnread} height="calc(100vh - 150px)" />
-          )}
-
           {/* ══ PROFILE ══ */}
           {activeTab === 'profile' && (
             <div style={{ maxWidth: 600, margin: '0 auto' }}>
-              <div style={{ background:'linear-gradient(135deg,var(--navy-deep),var(--navy))', borderRadius: 18, padding: '30px', textAlign: 'center', marginBottom: 18, color:'var(--on-solid)' }}>
+              <div style={{ background: 'linear-gradient(135deg,var(--navy-deep),var(--navy))', borderRadius: 18, padding: '30px', textAlign: 'center', marginBottom: 18, color: 'var(--on-solid)' }}>
                 <Avatar name={userName} size={72} bg='rgba(255,193,7,.2)' color='#ffc107' />
                 <h2 style={{ margin: '14px 0 3px', fontFamily: 'Georgia, serif', fontSize: 22 }}>{userName}</h2>
                 <div style={{ fontSize: 11, opacity: .7, letterSpacing: 1 }}>TEACHER</div>
                 <div style={{ fontSize: 12, opacity: .6, marginTop: 4 }}>{localStorage.getItem('userEmail') || 'teacher@essa.rw'}</div>
               </div>
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 22, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                <h3 style={{ margin: '0 0 16px', fontSize: 15, color:'var(--navy)', fontFamily: 'Georgia, serif', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ background: 'var(--surface-card)', borderRadius: 14, padding: 22, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
+                <h3 style={{ margin: '0 0 16px', fontSize: 15, color: 'var(--navy)', fontFamily: 'Georgia, serif', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <i className="fas fa-lock" style={{ color: '#ffc107' }} />Change Password
                 </h3>
                 {[['Current Password', 'currentPw'], ['New Password', 'newPw'], ['Confirm New Password', 'confirmPw']].map(([label, id]) => (
@@ -889,7 +882,7 @@ const TeacherDashboard = () => {
       </main>
 
       {/* ─── MODALS ─── */}
-      
+
       {/* Create Assignment Modal */}
       <Modal open={assignmentModal} onClose={() => setAssignmentModal(false)} title="Create Assignment" width={560}>
         <Field label="Title" required><Inp value={assignmentForm.title} placeholder="Assignment title" onChange={e => setAssignmentForm(p => ({ ...p, title: e.target.value }))} /></Field>
@@ -907,8 +900,8 @@ const TeacherDashboard = () => {
         <Field label="Description"><Txt value={assignmentForm.description} rows={4} placeholder="Instructions for students..." onChange={e => setAssignmentForm(p => ({ ...p, description: e.target.value }))} /></Field>
         <Field label="Due Date" required><Inp type="datetime-local" value={assignmentForm.dueDate} onChange={e => setAssignmentForm(p => ({ ...p, dueDate: e.target.value }))} /></Field>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Total Points"><Inp type="number" value={assignmentForm.totalPoints} onChange={e => setAssignmentForm(p => ({ ...p, totalPoints: parseInt(e.target.value) }))} /></Field>
-          <Field label="Attachment (PDF/DOC)"><input type="file" accept=".pdf,.doc,.docx,.jpg,.png" onChange={e => setAssignmentFile(e.target.files[0])} style={{ fontSize: 13, padding: '6px 0' }} /></Field>
+          <Field label="Total Points"><Inp type="number" min="0" value={assignmentForm.totalPoints} onChange={e => setAssignmentForm(p => ({ ...p, totalPoints: e.target.value === '' ? '' : parseInt(e.target.value, 10) }))} /></Field>
+          <Field label="Attachment (PDF/DOC)"><input type="file" accept=".pdf,.doc,.docx,.jpg,.png" onChange={e => setAssignmentFile(e.target.files[0] || null)} style={{ fontSize: 13, padding: '6px 0' }} /></Field>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
           <Btn onClick={() => setAssignmentModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
@@ -919,17 +912,17 @@ const TeacherDashboard = () => {
       {/* Grade Submissions Modal */}
       <Modal open={gradeModal} onClose={() => setGradeModal(false)} title={`Grade: ${gradeAssignment?.title || ''}`} width={640}>
         {(gradeAssignment?.submissions || []).length === 0
-          ? <div style={{ textAlign: 'center', padding: 40, color:'var(--text-faint)' }}><i className="fas fa-inbox" style={{ fontSize: 34, display: 'block', marginBottom: 10, opacity: .4 }} />No submissions yet</div>
+          ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-faint)' }}><i className="fas fa-inbox" style={{ fontSize: 34, display: 'block', marginBottom: 10, opacity: .4 }} />No submissions yet</div>
           : (gradeAssignment?.submissions || []).map(sub => {
             const student = students.find(s => String(s._id) === String(sub.studentId));
             const entry = gradeScores[sub.studentId] || {};
             return (
-              <div key={String(sub.studentId)} style={{ border:'1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 10, background:'var(--surface-raised)' }}>
+              <div key={String(sub.studentId)} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 10, background: 'var(--surface-raised)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                   <div>
-                    <strong style={{ fontSize: 13, color:'var(--navy)' }}>{student?.fullName || sub.studentId}</strong>
+                    <strong style={{ fontSize: 13, color: 'var(--navy)' }}>{student?.fullName || sub.studentId}</strong>
                     <span style={{ marginLeft: 10, fontSize: 11, color: '#28a745', textTransform: 'capitalize' }}>{sub.status}</span>
-                    <div style={{ fontSize: 11, color:'var(--text-faint)', marginTop: 2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 2 }}>
                       Submitted: {sub.submittedAt ? new Date(sub.submittedAt).toLocaleString() : '—'}
                       {sub.fileUrl && <> · <a href={sub.fileUrl} target="_blank" rel="noreferrer" style={{ color: '#3498db' }}>View file</a></>}
                     </div>
@@ -940,11 +933,11 @@ const TeacherDashboard = () => {
                   <input type="number" min="0" max="100" placeholder="Score / 100"
                     value={entry.score ?? ''}
                     onChange={e => setGradeScores(p => ({ ...p, [sub.studentId]: { ...(p[sub.studentId] || {}), score: e.target.value } }))}
-                    style={{ padding: '8px 10px', border:'1.5px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 13 }} />
+                    style={{ padding: '8px 10px', border: '1.5px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 13 }} />
                   <input placeholder="Feedback for student…"
                     value={entry.feedback || ''}
                     onChange={e => setGradeScores(p => ({ ...p, [sub.studentId]: { ...(p[sub.studentId] || {}), feedback: e.target.value } }))}
-                    style={{ padding: '8px 10px', border:'1.5px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 13 }} />
+                    style={{ padding: '8px 10px', border: '1.5px solid var(--surface-sunken-2)', borderRadius: 8, fontSize: 13 }} />
                 </div>
               </div>
             );
@@ -978,7 +971,7 @@ const TeacherDashboard = () => {
         <Field label="Date"><Inp type="date" value={attendanceForm.date} onChange={e => setAttendanceForm(p => ({ ...p, date: e.target.value }))} /></Field>
         <div style={{ maxHeight: 400, overflowY: 'auto' }}>
           {attendanceForm.records.map(record => (
-            <div key={record.studentId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom:'1px solid var(--border)' }}>
+            <div key={record.studentId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
               <span style={{ fontSize: 13 }}>{record.studentName}</span>
               <div style={{ display: 'flex', gap: 8 }}>
                 {['present', 'absent', 'late', 'excused'].map(status => (
@@ -988,15 +981,15 @@ const TeacherDashboard = () => {
                     style={{
                       padding: '4px 10px',
                       borderRadius: 20,
-                      border:'1px solid var(--border)',
+                      border: '1px solid var(--border)',
                       background: record.status === status ? (status === 'present' ? '#27ae60' : status === 'absent' ? '#e74c3c' : status === 'late' ? '#f39c12' : '#3498db') : 'var(--surface-card)',
-                      color: record.status === status ? 'var(--on-solid)' : '#666',
+                      color: record.status === status ? '#fff' : '#666',
                       cursor: 'pointer',
                       fontSize: 11,
                       transition: 'all 0.2s'
                     }}
                     onMouseEnter={e => { if (record.status !== status) e.currentTarget.style.background = '#f0f0f0'; }}
-                    onMouseLeave={e => { if (record.status !== status) e.currentTarget.style.background = 'var(--on-solid)'; }}
+                    onMouseLeave={e => { if (record.status !== status) e.currentTarget.style.background = 'var(--surface-card)'; }}
                   >
                     {status.toUpperCase()}
                   </button>
@@ -1017,10 +1010,10 @@ const TeacherDashboard = () => {
         <Field label="Topic/Chapter" required><Inp value={lessonForm.topic} placeholder="Topic or chapter name" onChange={e => setLessonForm(p => ({ ...p, topic: e.target.value }))} /></Field>
         <Field label="Learning Objectives"><Txt value={lessonForm.objectives} rows={2} placeholder="What students will learn..." onChange={e => setLessonForm(p => ({ ...p, objectives: e.target.value }))} /></Field>
         <Field label="Materials Needed"><Inp value={lessonForm.materials} placeholder="Required materials/resources" onChange={e => setLessonForm(p => ({ ...p, materials: e.target.value }))} /></Field>
-        <Field label="File Attachment (PDF/DOC/PPT)"><input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.png" onChange={e => setLessonFile(e.target.files[0])} style={{ fontSize: 13, padding: '6px 0' }} /></Field>
+        <Field label="File Attachment (PDF/DOC/PPT)"><input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.png" onChange={e => setLessonFile(e.target.files[0] || null)} style={{ fontSize: 13, padding: '6px 0' }} /></Field>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <input type="checkbox" checked={lessonForm.shareWithStudents} onChange={e => setLessonForm(p => ({ ...p, shareWithStudents: e.target.checked }))} style={{ width: 18, height: 18 }} />
-          <span style={{ fontSize: 12, color:'var(--text-secondary)' }}>Share with students immediately</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Share with students immediately</span>
         </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
           <Btn onClick={() => setLessonModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>

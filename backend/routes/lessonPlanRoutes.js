@@ -8,7 +8,7 @@ const requireRole = require('../middleware/roleCheck');
 
 const router = express.Router();
 
-const review = requireRole('academic_admin', 'super_admin');
+const review = requireRole('academic_admin', 'headmaster');
 
 const withNames = async (plans) => {
   const classIds = [...new Set(plans.map(p => p.classId).filter(Boolean).map(String))];
@@ -28,7 +28,7 @@ const withNames = async (plans) => {
   });
 };
 
-router.get('/lesson-plans', authMiddleware, requireRole('academic_admin', 'super_admin', 'teacher'), async (req, res) => {
+router.get('/lesson-plans', authMiddleware, requireRole('academic_admin', 'headmaster', 'teacher'), async (req, res) => {
   try {
     const query = {};
     if (req.userRole === 'teacher') {

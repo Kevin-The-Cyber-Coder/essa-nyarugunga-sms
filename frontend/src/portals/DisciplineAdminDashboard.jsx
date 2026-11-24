@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
-import io from 'socket.io-client';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
-import MessagingPanel from '../components/chat/MessagingPanel';
 import { openPrintableDocument } from '../utils/printDocument';
+import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
 
 const API_URL = import.meta.env.VITE_API_URL;
-const SOCKET_URL = API_URL;
 const getToken = () => localStorage.getItem('portalToken');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
@@ -18,7 +16,7 @@ const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour: '2-di
 
 const roleBadge = (role) => {
   const map = {
-    super_admin: { label: 'Super Admin', color: '#ffc107', bg:'var(--tint-amber)' },
+    headmaster: { label: 'Headmaster', color: '#ffc107', bg:'var(--tint-amber)' },
     academic_admin: { label: 'Academic Admin', color: '#27ae60', bg:'var(--tint-success)' },
     discipline_admin: { label: 'Discipline Admin', color: '#e74c3c', bg:'var(--tint-danger)' },
     accounts_admin: { label: 'Accounts Admin', color: '#3498db', bg:'var(--tint-primary)' },
@@ -178,7 +176,6 @@ const punishmentOptions = {
 // ═══════════════════════════════════════════════════════════════════
 const DisciplineAdminDashboard = () => {
   const navigate = useNavigate();
-  const msgEndRef = useRef(null);
 
   // layout
   const [activeTab, setActiveTab] = useState('overview');
@@ -201,7 +198,6 @@ const DisciplineAdminDashboard = () => {
   const [incidentModal, setIncidentModal] = useState(false);
   const [permissionModal, setPermissionModal] = useState(false);
   const [announcementModal, setAnnouncementModal] = useState(false);
-  const [massMessageModal, setMassMessageModal] = useState(false);
   
   // forms
   const [incidentForm, setIncidentForm] = useState({
@@ -213,24 +209,12 @@ const DisciplineAdminDashboard = () => {
   const [announcementForm, setAnnouncementForm] = useState({
     title: '', content: '', audience: 'all', priority: 'normal'
   });
-  const [messageForm, setMessageForm] = useState({
-    subject: '', content: '', audience: 'all', messageType: 'email'
-  });
   
   // filters
   const [caseFilter, setCaseFilter] = useState('all');
   const [classFilter, setClassFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // messaging
-  const [msgUsers, setMsgUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [msgText, setMsgText] = useState('');
-  const [msgTab, setMsgTab] = useState('inbox');
-  const [unread, setUnread] = useState(0);
-  const [socket, setSocket] = useState(null);
-  const [msgSearch, setMsgSearch] = useState('');
 
   const userName = localStorage.getItem('userName') || 'Discipline Admin';
   const userId = localStorage.getItem('userId');
@@ -241,25 +225,12 @@ const DisciplineAdminDashboard = () => {
     check(); window.addEventListener('resize', check); return () => window.removeEventListener('resize', check);
   }, []);
 
-  // socket
-  useEffect(() => {
-    const token = getToken(); if (!token) return;
-    const sock = io(SOCKET_URL, { auth: { token } });
-    setSocket(sock);
-    if (userId) sock.emit('join', userId);
-    sock.on('new_message', () => { fetchUnread(); fetchMsgUsers(); });
-    sock.on('newMessage', () => { fetchUnread(); fetchMsgUsers(); });
-    return () => sock.disconnect();
-  }, [userId]);
-
   // auth + load
   useEffect(() => {
     const token = getToken(); const role = localStorage.getItem('userRole');
     if (!token || role !== 'discipline_admin') { navigate('/portal/login'); return; }
     loadAll();
   }, [navigate]);
-
-  useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   // ─── API ──────────────────────────────────────────────────────────
   const api = useCallback(async (path, opts = {}) => {
@@ -270,8 +241,7 @@ const DisciplineAdminDashboard = () => {
 
   const loadAll = () => Promise.all([
     fetchDisciplineCases(), fetchPermissions(), fetchAnnouncements(),
-    fetchStudents(), fetchClasses(), fetchTeachers(),
-    fetchMsgUsers(), fetchUnread()
+    fetchStudents(), fetchClasses(), fetchTeachers()
   ]).finally(() => setLoading(false));
 
   const fetchDisciplineCases = () => api('/discipline-admin/cases').then(d => {
@@ -288,61 +258,6 @@ const DisciplineAdminDashboard = () => {
   const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => setStudents([]));
   const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => setClasses([]));
   const fetchTeachers = () => api('/academic-admin/teachers-list').then(d => setTeachers(Array.isArray(d) ? d : [])).catch(() => setTeachers([]));
-  
-  const fetchMsgUsers = () => api('/messages/users').then(d => {
-    const all = Object.values(d.users || d || {}).flat();
-    setMsgUsers(all);
-  }).catch(() => setMsgUsers([]));
-  
-  const fetchUnread = () => api('/messages/unread-count').then(d => setUnread(d.count || 0)).catch(() => {});
-  const fetchConversation = (uid) => api(`/messages/conversation/${uid}`).then(d => setMessages(Array.isArray(d.messages) ? d.messages : [])).catch(() => setMessages([]));
-  
-  const sendMessage = async () => {
-    if (!msgText.trim() || !selectedUser) return;
-    try {
-      const res = await api('/messages/send', {
-        method: 'POST',
-        body: JSON.stringify({ recipientId: selectedUser._id, subject: 'Direct Message', content: msgText.trim() })
-      });
-      setMessages(prev => [...prev, res.message]);
-      setMsgText('');
-      if (socket) socket.emit('sendMessage', { receiverId: selectedUser._id, ...res.message });
-      fetchUnread();
-    } catch (e) { console.error('Send error:', e); }
-  };
-  
-  const sendMassMessage = async () => {
-    if (!messageForm.subject || !messageForm.content) {
-      Swal.fire('Missing Fields', 'Subject and content required', 'warning');
-      return;
-    }
-    setSaving(true);
-    try {
-      // Get recipients based on audience
-      let recipients = [];
-      if (messageForm.audience === 'all_parents') {
-        recipients = students.map(s => ({ id: s.userId, name: s.parentName }));
-      } else if (messageForm.audience === 'all_teachers') {
-        recipients = teachers;
-      } else if (messageForm.audience === 'all_students') {
-        recipients = students;
-      }
-      
-      // Send mass message (batch)
-      for (const recipient of recipients.slice(0, 50)) { // Limit to 50 per batch
-        if (recipient.id) {
-          await api('/messages/send', {
-            method: 'POST',
-            body: JSON.stringify({ recipientId: recipient.id, subject: messageForm.subject, content: messageForm.content })
-          }).catch(() => {});
-        }
-      }
-      Swal.fire('✅ Messages Sent!', `Messages sent to ${messageForm.audience.replace(/_/g, ' ')}`, 'success');
-      setMassMessageModal(false);
-      setMessageForm({ subject: '', content: '', audience: 'all_parents', messageType: 'email' });
-    } catch (e) { Swal.fire('Error', e.message || 'Failed', 'error'); }
-    finally { setSaving(false); }
-  };
   
   const reportIncident = async () => {
     if (!incidentForm.studentId || !incidentForm.category || !incidentForm.description) {
@@ -513,7 +428,7 @@ const DisciplineAdminDashboard = () => {
           toDate: permissionForm.toDate
         })
       });
-      Swal.fire('✅ Request Submitted!', 'Your permission request has been sent to Super Admin', 'success');
+      Swal.fire('✅ Request Submitted!', 'Your permission request has been sent to Headmaster', 'success');
       setPermissionModal(false);
       setPermissionForm({ studentId: '', type: 'medical', reason: '', fromDate: '', toDate: '', attachment: '' });
     } catch (e) { Swal.fire('Error', e.message, 'error'); }
@@ -527,11 +442,6 @@ const DisciplineAdminDashboard = () => {
     return true;
   });
   
-  const filteredUsers = msgUsers.filter(u =>
-    u.fullName?.toLowerCase().includes(msgSearch.toLowerCase()) ||
-    u.role?.toLowerCase().includes(msgSearch.toLowerCase())
-  );
-  
   const pendingPermissions = permissions.filter(p => p.status === 'pending').length;
   const pendingCases = disciplineCases.filter(c => c.status === 'pending').length;
   const resolvedCases = disciplineCases.filter(c => c.status === 'resolved').length;
@@ -542,7 +452,7 @@ const DisciplineAdminDashboard = () => {
     { id: 'permissions', label: 'Permission Requests', icon: 'fas fa-file-signature', badge: pendingPermissions },
     { id: 'students', label: 'Students', icon: 'fas fa-user-graduate' },
     { id: 'announcements', label: 'Announcements', icon: 'fas fa-bullhorn' },
-    { id: 'messages', label: 'Messages', icon: 'fas fa-comments', badge: unread },
+    { id: 'content', label: 'Website content', icon: 'fas fa-newspaper' },
     { id: 'profile', label: 'Profile', icon: 'fas fa-user-shield' },
   ];
 
@@ -564,8 +474,6 @@ const DisciplineAdminDashboard = () => {
         @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         .tab-anim{animation:fadeIn .22s ease}
         ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:#ccc;border-radius:10px}
-        .sent-bubble{background:#1a3a5c;color:white;border-radius:18px 18px 4px 18px;padding:10px 15px;max-width:70%;align-self:flex-end;font-size:13px}
-        .recv-bubble{background:white;color:#333;border-radius:18px 18px 18px 4px;padding:10px 15px;max-width:70%;align-self:flex-start;font-size:13px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
         @media(max-width:768px){.hide-mobile{display:none!important}}
       `}</style>
 
@@ -619,10 +527,6 @@ const DisciplineAdminDashboard = () => {
             <button onClick={() => setPermissionModal(true)} style={{ background:'var(--tint-danger)', border: 'none', padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, color: '#e74c3c', cursor: 'pointer' }}>
               <i className="fas fa-file-alt" style={{ marginRight: 5 }} /> Request Permission
             </button>
-            {unread > 0 && <button onClick={() => setActiveTab('messages')} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color:'var(--text-faint)', fontSize: 17 }}>
-              <i className="fas fa-bell" />
-              <span style={{ position: 'absolute', top: -4, right: -4, background: '#e74c3c', color:'var(--on-solid)', borderRadius: '50%', fontSize: 9, width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{unread}</span>
-            </button>}
             <Avatar name={userName} size={32} />
             <div className="hide-mobile">
               <div style={{ fontSize: 12, fontWeight: 600, color:'var(--text-body)' }}>{userName}</div>
@@ -660,7 +564,6 @@ const DisciplineAdminDashboard = () => {
               {/* Quick Actions */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
                 <Btn onClick={() => setIncidentModal(true)} icon="fas fa-plus" color="#e74c3c">New Incident</Btn>
-                <Btn onClick={() => setMassMessageModal(true)} icon="fas fa-envelope" color="#3498db">Mass Message</Btn>
                 <Btn onClick={() => setAnnouncementModal(true)} icon="fas fa-bullhorn" color="#1a3a5c">Post Announcement</Btn>
               </div>
               
@@ -837,15 +740,7 @@ const DisciplineAdminDashboard = () => {
             </div>
           )}
 
-          {/* ══ MESSAGES ══ */}
-          {activeTab === 'messages' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                <Btn small onClick={() => setMassMessageModal(true)} icon="fas fa-users" color="#3498db">Mass Message</Btn>
-              </div>
-              <MessagingPanel recipient={selectedUser || undefined} height="calc(100vh - 200px)" />
-            </div>
-          )}
+          {activeTab === 'content' && <WebsiteContentPanel role="discipline_admin" />}
 
           {/* ══ PROFILE ══ */}
           {activeTab === 'profile' && (
@@ -920,7 +815,7 @@ const DisciplineAdminDashboard = () => {
         </div>
       </Modal>
 
-      {/* Permission Request Modal (for admin to request from super admin) */}
+      {/* Permission Request Modal (for admin to request from headmaster) */}
       <Modal open={permissionModal} onClose={() => setPermissionModal(false)} title="Request Permission" width={500}>
         <Field label="Request Type" required>
           <Sel value={permissionForm.type} onChange={e => setPermissionForm(p => ({ ...p, type: e.target.value }))}>
@@ -971,24 +866,6 @@ const DisciplineAdminDashboard = () => {
         </div>
       </Modal>
 
-      {/* Mass Message Modal */}
-      <Modal open={massMessageModal} onClose={() => setMassMessageModal(false)} title="Mass Message" width={540}>
-        <Field label="Subject" required><Inp value={messageForm.subject} placeholder="Message subject" onChange={e => setMessageForm(p => ({ ...p, subject: e.target.value }))} /></Field>
-        <Field label="Audience" required>
-          <Sel value={messageForm.audience} onChange={e => setMessageForm(p => ({ ...p, audience: e.target.value }))}>
-            <option value="all_parents">👪 All Parents</option>
-            <option value="all_teachers">👨‍🏫 All Teachers</option>
-            <option value="all_students">🎓 All Students</option>
-          </Sel>
-        </Field>
-        <Field label="Message" required>
-          <Txt value={messageForm.content} rows={5} placeholder="Type your message here..." onChange={e => setMessageForm(p => ({ ...p, content: e.target.value }))} />
-        </Field>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-          <Btn onClick={() => setMassMessageModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-          <Btn onClick={sendMassMessage} icon="fas fa-envelope" color="#3498db" disabled={saving}>{saving ? 'Sending…' : 'Send Message'}</Btn>
-        </div>
-      </Modal>
     </div>
   );
 };

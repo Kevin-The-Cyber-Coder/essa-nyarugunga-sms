@@ -15,7 +15,7 @@ const normalizeAudience = (raw) => {
   return audience;
 };
 
-const canManage = requireRole('academic_admin', 'super_admin');
+const canManage = requireRole('academic_admin', 'headmaster');
 
 router.get('/events', authMiddleware, async (req, res) => {
   try {

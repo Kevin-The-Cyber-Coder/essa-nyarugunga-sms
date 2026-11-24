@@ -47,19 +47,19 @@ const resetDatabase = async () => {
       console.log(`Dropped collection: ${collection.collectionName}`);
     }
 
-    // Create Super Admin
+    // Create Headmaster
     const hashedPassword = await bcrypt.hash('admin123', 10);
-    const superAdmin = new User({
-      fullName: 'Super Administrator',
+    const headmaster = new User({
+      fullName: 'Headmaster',
       email: 'admin@essa.rw',
       password: hashedPassword,
-      role: 'super_admin',
+      role: 'headmaster',
       phone: '+250788123456',
       isActive: true,
       createdAt: new Date()
     });
-    await superAdmin.save();
-    console.log('✅ Super Admin created: admin@essa.rw / admin123');
+    await headmaster.save();
+    console.log('✅ Headmaster created: admin@essa.rw / admin123');
 
     // Create Academic Admin
     const academicAdminPassword = await bcrypt.hash('academic123', 10);

@@ -11,13 +11,13 @@ const http = require('http');
 const path = require('path');
 
 const connectDB = require('./config/database');
-const { initSocket } = require('./socket');
 const seedDatabase = require('./utils/seedDatabase');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./config/rateLimit');
 const notifier = require('./utils/notifier');
 const { startReminderScheduler } = require('./utils/reminderScheduler');
 const { startAnnouncementScheduler } = require('./utils/announcementBroadcast');
+const { startContentScheduler } = require('./utils/contentScheduler');
 const User = require('./models/User');
 
 if (!process.env.JWT_SECRET) {
@@ -28,7 +28,6 @@ if (!process.env.JWT_SECRET) {
 // ==================== APP SETUP ====================
 const app = express();
 const server = http.createServer(app);
-initSocket(server);
 
 app.use(helmet());
 app.use(cors({
@@ -53,12 +52,14 @@ app.use('/api', require('./routes/announcementRoutes'));
 app.use('/api', require('./routes/classResourceRoutes'));
 app.use('/api', require('./routes/newsRoutes'));
 app.use('/api', require('./routes/galleryRoutes'));
-// Ahead of admissionRoutes so the richer admin endpoints match first. The
-// router declares its paths as /applications/... and is mounted under the
-// academic-admin prefix the frontend already calls.
-app.use('/api/academic-admin', require('./routes/admissionsAdminRoutes'));
+app.use('/api', require('./routes/contentRoutes'));
+// Ahead of admissionRoutes so the richer admin endpoints match first. This
+// router is deliberately not under /academic-admin: admissions belong to the
+// Headmaster (decision) and Admin Assistant (review/registration) only.
+app.use('/api/admissions-admin', require('./routes/admissionsAdminRoutes'));
 app.use('/api', require('./routes/admissionRoutes'));
-app.use('/api', require('./routes/superAdminRoutes'));
+app.use('/api', require('./routes/headmasterRoutes'));
+app.use('/api', require('./routes/adminAssistantRoutes'));
 app.use('/api', require('./routes/academicAdminRoutes'));
 app.use('/api', require('./routes/teacherRoutes'));
 app.use('/api', require('./routes/quizRoutes'));
@@ -68,9 +69,7 @@ app.use('/api', require('./routes/parentRoutes'));
 app.use('/api', require('./routes/disciplineAdminRoutes'));
 app.use('/api', require('./routes/permissionRoutes'));
 app.use('/api', require('./routes/accountsRoutes'));
-app.use('/api', require('./routes/messageRoutes'));
-app.use('/api', require('./routes/conversationRoutes'));
-app.use('/api', require('./routes/fileRoutes'));
+app.use('/api', require('./routes/resourceUploadRoutes'));
 app.use('/api', require('./routes/notificationRoutes'));
 app.use('/api', require('./routes/calendarRoutes'));
 app.use('/api', require('./routes/subjectRoutes'));
@@ -117,6 +116,9 @@ connectDB()
       notifier.startFlushLoop();
       // Promotes scheduled announcements whose time has arrived.
       startAnnouncementScheduler();
+
+      // Publishes news/gallery items whose scheduled date has arrived.
+      startContentScheduler();
 
       // Nudges pupils and guardians about assignments and exams that fall due
       // within the next day.
