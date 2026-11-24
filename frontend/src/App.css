@@ -236,7 +236,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: url('../src/assets/image.png') center/cover;
+  background: url('./assets/hero-bg.jpg') center/cover;
   opacity: 0.2;
   z-index: 0;
 }
@@ -1082,33 +1082,6 @@ section {
   transform: translateX(5px);
 }
 
-.newsletter-form {
-  display: flex;
-  margin: 1rem 0;
-  justify-content: flex-start;
-}
-
-.newsletter-form input {
-  flex: 1;
-  padding: 10px;
-  border: none;
-  border-radius: 8px 0 0 8px;
-  max-width: 200px;
-}
-
-.newsletter-form button {
-  background: #ffc107;
-  border: none;
-  padding: 0 15px;
-  border-radius: 0 8px 8px 0;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.newsletter-form button:hover {
-  background: #ff9800;
-}
-
 .emergency-contact {
   margin-top: 1rem;
   text-align: left;
@@ -1180,14 +1153,6 @@ section {
   
   .footer-badges {
     justify-content: flex-start;
-  }
-  
-  .newsletter-form {
-    justify-content: flex-start;
-  }
-  
-  .newsletter-form input {
-    max-width: 100%;
   }
   
   .footer-bottom {
@@ -2195,73 +2160,6 @@ section {
   margin: 0;
 }
 
-/* Calendar */
-.academics-calendar {
-  padding: 80px 0;
-  background: #f8f9fa;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-}
-
-.calendar-item {
-  display: flex;
-  gap: 1rem;
-  background: white;
-  padding: 1rem;
-  border-radius: 12px;
-  transition: transform 0.3s ease;
-}
-
-.calendar-item:hover {
-  transform: translateX(5px);
-}
-
-.calendar-date {
-  text-align: center;
-  min-width: 70px;
-  background: #1a3a5c;
-  color: white;
-  padding: 10px;
-  border-radius: 12px;
-}
-
-.calendar-date .month {
-  display: block;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-}
-
-.calendar-date .day {
-  display: block;
-  font-size: 1.5rem;
-  font-weight: bold;
-}
-
-.calendar-event h4 {
-  color: #1a3a5c;
-  margin-bottom: 5px;
-}
-
-.calendar-event p {
-  color: #666;
-  font-size: 0.9rem;
-}
-
-.calendar-note {
-  margin-top: 2rem;
-  padding: 1rem;
-  background: #fff3cd;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #856404;
-}
-
 /* Grading */
 .academics-grading {
   padding: 80px 0;
@@ -2429,9 +2327,6 @@ section {
     grid-template-columns: 1fr;
   }
   
-  .calendar-grid {
-    grid-template-columns: 1fr;
-  }
 }
 /* Admissions Page Styles */
 .admissions-hero {
@@ -3614,67 +3509,6 @@ section {
   width: 100%;
 }
 
-/* Newsletter Bar */
-.newsletter-bar {
-  padding: 30px 0;
-  background: #ffc107;
-  color: #1a3a5c;
-}
-
-.newsletter-wrapper {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.newsletter-text {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.newsletter-text i {
-  font-size: 2rem;
-}
-
-.newsletter-text h3 {
-  margin-bottom: 5px;
-}
-
-.newsletter-text p {
-  font-size: 0.9rem;
-  opacity: 0.9;
-}
-
-.newsletter-form-inline {
-  display: flex;
-  gap: 10px;
-}
-
-.newsletter-form-inline input {
-  padding: 12px 20px;
-  border: none;
-  border-radius: 40px;
-  width: 250px;
-}
-
-.newsletter-form-inline button {
-  padding: 12px 25px;
-  background: #1a3a5c;
-  color: white;
-  border: none;
-  border-radius: 40px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.newsletter-form-inline button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 10px rgba(0,0,0,0.2);
-}
-
 /* Search Section */
 .news-search-section {
   padding: 40px 0;
@@ -4244,25 +4078,6 @@ section {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .newsletter-wrapper {
-    flex-direction: column;
-    text-align: center;
-  }
-  
-  .newsletter-text {
-    flex-direction: column;
-    text-align: center;
-  }
-  
-  .newsletter-form-inline {
-    flex-direction: column;
-    width: 100%;
-  }
-  
-  .newsletter-form-inline input {
-    width: 100%;
-  }
-  
   .search-filter-container {
     flex-direction: column;
   }
