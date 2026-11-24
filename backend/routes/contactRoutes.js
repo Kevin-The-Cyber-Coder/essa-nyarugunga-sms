@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 
 const Contact = require('../models/Contact');
-const emailTransporter = require('../config/email');
+const { sendMail, isEmailConfigured, getFromAddress } = require('../config/email');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
 const { publicFormLimiter } = require('../config/rateLimit');
@@ -20,9 +20,9 @@ router.post('/contact/submit', publicFormLimiter,
     try {
       const { fullName, email, phone, subject, message } = req.body;
       const contact = await Contact.create({ fullName, email: email.toLowerCase(), phone, subject, message });
-      if (process.env.EMAIL_USER) {
-        emailTransporter.sendMail({
-          from: process.env.EMAIL_USER,
+      if (isEmailConfigured()) {
+        sendMail({
+          from: getFromAddress(),
           to: process.env.ADMIN_EMAIL || 'admin@essa.rw',
           subject: `📬 New Contact from ${fullName}`,
           html: `<p><b>Name:</b> ${fullName}</p><p><b>Email:</b> ${email}</p><p><b>Phone:</b> ${phone || '-'}</p><p><b>Subject:</b> ${subject || '-'}</p><p><b>Message:</b> ${message}</p>`

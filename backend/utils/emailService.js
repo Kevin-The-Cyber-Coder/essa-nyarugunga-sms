@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 
-const emailTransporter = require('../config/email');
+const { sendMail, isEmailConfigured, getFromAddress } = require('../config/email');
 const { getJWTSecret } = require('./jwt');
 
 const PRODUCTION_FRONTEND_URL = 'https://essa-nyarugunga-school-complex-syst-eta.vercel.app';
@@ -15,10 +15,10 @@ const buildSetupLink = (userId) => {
 };
 
 const sendWelcomeEmail = async (user) => {
-  if (!process.env.EMAIL_USER) return;
+  if (!isEmailConfigured()) return;
   const setupLink = user._id ? buildSetupLink(user._id) : null;
-  await emailTransporter.sendMail({
-    from: process.env.EMAIL_USER,
+  await sendMail({
+    from: getFromAddress(),
     to: user.email,
     subject: `Welcome to ESSA Nyarugunga Portal, ${user.fullName}!`,
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
@@ -43,9 +43,9 @@ const sendWelcomeEmail = async (user) => {
 };
 
 const sendAdmissionConfirmationEmail = async (application) => {
-  if (!process.env.EMAIL_USER) return;
-  await emailTransporter.sendMail({
-    from: process.env.EMAIL_USER,
+  if (!isEmailConfigured()) return;
+  await sendMail({
+    from: getFromAddress(),
     to: application.email,
     subject: `🎓 Admission Application Received - ESSA Nyarugunga`,
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
@@ -85,13 +85,13 @@ const DECISION_COPY = {
 };
 
 const sendAdmissionDecisionEmail = async (application) => {
-  if (!process.env.EMAIL_USER) return;
+  if (!isEmailConfigured()) return;
   const copy = DECISION_COPY[application.status];
   // Only the four decided states have something to announce; "reviewing" is an
   // internal working state and "pending" already got a confirmation email.
   if (!copy) return;
-  await emailTransporter.sendMail({
-    from: process.env.EMAIL_USER,
+  await sendMail({
+    from: getFromAddress(),
     to: application.email,
     subject: copy.subject,
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
@@ -105,10 +105,10 @@ const sendAdmissionDecisionEmail = async (application) => {
 };
 
 // Plain transactional mail for the notification centre. Guarded the same way as
-// the rest of this module: with no EMAIL_USER configured the app must keep
-// working and simply not send.
+// the rest of this module: with no Resend credentials configured the app must
+// keep working and simply not send.
 const sendNotificationEmail = async (user, { title, body, link }) => {
-  if (!process.env.EMAIL_USER || !user || !user.email) return false;
+  if (!isEmailConfigured() || !user || !user.email) return false;
   const origin = frontendUrl;
   const action = link
     ? `<p style="text-align:center;margin:24px 0;">
@@ -117,8 +117,8 @@ const sendNotificationEmail = async (user, { title, body, link }) => {
        </p>`
     : '';
 
-  await emailTransporter.sendMail({
-    from: process.env.EMAIL_USER,
+  await sendMail({
+    from: getFromAddress(),
     to: user.email,
     subject: title,
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">

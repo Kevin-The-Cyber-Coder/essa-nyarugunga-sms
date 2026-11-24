@@ -5,6 +5,7 @@ const authMiddleware = require('../middleware/auth');
 const Notification = require('../models/Notification');
 const NotificationPreference = require('../models/NotificationPreference');
 const { notify, flushDeferred } = require('../utils/notifier');
+const { isEmailConfigured } = require('../config/email');
 
 const router = express.Router();
 
@@ -156,7 +157,7 @@ router.get('/notifications/preferences', authMiddleware, async (req, res) => {
       success: true,
       preferences: prefs,
       providers: {
-        email: !!process.env.EMAIL_USER
+        email: isEmailConfigured()
       }
     });
   } catch (error) {
