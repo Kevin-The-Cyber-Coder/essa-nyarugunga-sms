@@ -9,7 +9,6 @@ const {
   CONTENT_TYPES, contentCategory, isContentManager, canManage,
   lifecycle, publicVisibility
 } = require('../utils/contentAccess');
-const { sendNewsNotificationEmail } = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -74,10 +73,6 @@ router.post('/content/:type', authMiddleware, requireManager, (req, res, next) =
     const user = await User.findById(req.userId).select('fullName');
     if (type === CONTENT_TYPES.news) fields.author = user?.fullName || 'School';
     const item = await modelFor(type).create(fields);
-
-    if (type === CONTENT_TYPES.news && item.status === 'published') {
-      sendNewsNotificationEmail(item).catch(console.error);
-    }
     res.status(201).json({ success: true, item });
   } catch (error) {
     res.status(500).json({ message: error.message });

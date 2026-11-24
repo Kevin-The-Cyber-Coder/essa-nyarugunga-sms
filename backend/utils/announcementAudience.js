@@ -102,7 +102,7 @@ const gradeMatchesCaller = (grades, caller = {}) => {
 // A pupil or a parent only ever sees a class-scoped notice for a class they are
 // actually enrolled in. This check runs before the role and grade checks, because
 // a teacher's notice to "S3 B" is addressed to the role 'students' as well: role
-// matching alone would hand every pupil in the school someone else's homework
+// matching alone would hand every pupil in the school someone else's assignment
 // reminder.
 const classScopedToCaller = (announcement, caller = {}) => {
   const classes = audienceClassIds(announcement);
@@ -116,7 +116,7 @@ const classScopedToCaller = (announcement, caller = {}) => {
 //
 // Deliberately separate from `visibleToAudience`. Staff can see every notice
 // for oversight purposes, but "can see" is not "was addressed": a teacher's
-// homework reminder for S3 B should not push a notification onto every
+// assignment reminder for S3 B should not push a notification onto every
 // administrator just because their portal shows it. Notification fan-out uses
 // this function; portal visibility uses the one below.
 //

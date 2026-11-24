@@ -44,7 +44,7 @@ const authorizeStudentAccess = async (req, student) => {
 };
 
 // Confirms a teacher is responsible for a class, either as its class teacher or
-// through a subject allocation. Used by the class-wide endpoints (attendance
+// through a subject allocation. Used by the class-wide endpoints
 // registers, exam mark entry) where there is no single student to authorise
 // against, so authorizeStudentAccess cannot help.
 const teacherOwnsClass = async (userId, classId) => {

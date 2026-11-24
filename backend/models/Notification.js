@@ -4,12 +4,14 @@ const NOTIFICATION_TYPES = [
   'announcement',
   'assignment',
   'exam',
-  'homework',
   'academic_feedback',
   'fee',
-  'attendance',
   'admission',
-  'system'
+  'system',
+  'finance',
+  'discipline',
+  'resource',
+  'content'
 ];
 
 const notificationSchema = new mongoose.Schema(

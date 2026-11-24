@@ -10,7 +10,6 @@ const Student = require('../models/Student');
 const Class = require('../models/Class');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const Discipline = require('../models/Discipline');
-const Permission = require('../models/Permission');
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
 const authMiddleware = require('../middleware/auth');
@@ -93,20 +92,19 @@ router.delete('/headmaster/admins/:id', authMiddleware, requireRole(ROLES.HEADMA
 
 router.get('/headmaster/stats', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
   try {
-    const [totalStudents, totalTeachers, totalClasses, pendingApplications, pendingDiscipline, pendingPermissions, totalIncome, totalExpenses] = await Promise.all([
+    const [totalStudents, totalTeachers, totalClasses, pendingApplications, pendingDiscipline, totalIncome, totalExpenses] = await Promise.all([
       Student.countDocuments({ isActive: true }),
       TeacherProfile.countDocuments(),
       Class.countDocuments(),
       AdmissionApplication.countDocuments({ status: 'pending' }),
       Discipline.countDocuments({ status: 'pending' }),
-      Permission.countDocuments({ status: 'pending' }),
       Income.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }]),
       Expense.aggregate([{ $group: { _id: null, total: { $sum: '$amount' } } }])
     ]);
     res.json({
       success: true,
       totalStudents, totalTeachers, totalClasses, pendingApplications,
-      pendingDiscipline, pendingPermissions,
+      pendingDiscipline,
       totalIncome: totalIncome[0]?.total || 0,
       totalExpenses: totalExpenses[0]?.total || 0
     });

@@ -17,12 +17,14 @@ const notificationPreferenceSchema = new mongoose.Schema(
       announcement: { type: Boolean, default: true },
       assignment: { type: Boolean, default: true },
       exam: { type: Boolean, default: true },
-      homework: { type: Boolean, default: true },
       academic_feedback: { type: Boolean, default: true },
       fee: { type: Boolean, default: true },
-      attendance: { type: Boolean, default: true },
       admission: { type: Boolean, default: true },
-      system: { type: Boolean, default: true }
+      system: { type: Boolean, default: true },
+      finance: { type: Boolean, default: true },
+      discipline: { type: Boolean, default: true },
+      resource: { type: Boolean, default: true },
+      content: { type: Boolean, default: true }
     },
 
     quietHours: {

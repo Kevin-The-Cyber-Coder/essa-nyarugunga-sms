@@ -2,7 +2,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
-const uploadDirs = ['./uploads', './uploads/news', './uploads/gallery', './uploads/profile', './uploads/assignments', './uploads/lessons', './uploads/submissions'];
+const uploadDirs = ['./uploads', './uploads/news', './uploads/gallery', './uploads/profile', './uploads/assignments', './uploads/submissions'];
 uploadDirs.forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
@@ -42,15 +42,10 @@ const uploadAssignment = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: documentFileFilter
 });
-const uploadLesson = multer({
-  storage: makeStorage('lessons', 'lesson'),
-  limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: documentFileFilter
-});
 const uploadSubmission = multer({
   storage: makeStorage('submissions', 'submission'),
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: documentFileFilter
 });
 
-module.exports = { uploadNews, uploadGallery, uploadProfile, uploadAssignment, uploadLesson, uploadSubmission };
+module.exports = { uploadNews, uploadGallery, uploadProfile, uploadAssignment, uploadSubmission };

@@ -6,12 +6,10 @@ const Class = require('../models/Class');
 const Student = require('../models/Student');
 const Assignment = require('../models/Assignment');
 const Grade = require('../models/Grade');
-const Attendance = require('../models/Attendance');
-const LessonPlan = require('../models/LessonPlan');
 const Exam = require('../models/Exam');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
-const { uploadAssignment, uploadLesson } = require('../config/upload');
+const { uploadAssignment } = require('../config/upload');
 const { authorizeStudentAccess, teacherOwnsClass } = require('../utils/access');
 const { buildWeightIndex, averageFor, letterFor } = require('../utils/grading');
 const { notifyClass } = require('../utils/classNotify');
@@ -97,59 +95,6 @@ router.post('/teacher/grades', authMiddleware, requireRole('teacher', 'academic_
   }
 });
 
-// ==================== ATTENDANCE ====================
-router.post('/teacher/attendance', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
-  try {
-    const { classId, date, records } = req.body;
-    if (!classId || !Array.isArray(records) || !records.length) {
-      return res.status(400).json({ message: 'classId and a non-empty records array are required' });
-    }
-
-    // Class-wide write, so authorise the class rather than each student.
-    if (req.userRole !== 'headmaster' && req.userRole !== 'academic_admin') {
-      if (!(await teacherOwnsClass(req.userId, classId))) {
-        return res.status(403).json({ message: 'You are not assigned to this class' });
-      }
-    }
-
-    // Reject unknown students rather than writing orphaned attendance rows that
-    // silently never show up in any register or attendance rate.
-    const students = await Student.find({ _id: { $in: records.map(r => r.studentId) } }).select('_id classId');
-    const known = new Set(students.map(s => String(s._id)));
-    const unknown = records.filter(r => !known.has(String(r.studentId)));
-    if (unknown.length) {
-      return res.status(400).json({ message: `Unknown studentId(s): ${unknown.map(r => r.studentId).join(', ')}` });
-    }
-
-    // Normalise the day to midnight UTC so re-saving the same date updates the
-    // existing rows instead of appending a second register for that day.
-    const day = new Date(date);
-    if (Number.isNaN(day.getTime())) return res.status(400).json({ message: 'Invalid date' });
-    day.setUTCHours(0, 0, 0, 0);
-
-    const bulk = records.map(r => ({
-      updateOne: {
-        filter: { studentId: r.studentId, classId, date: day },
-        update: { $set: { status: r.status, teacherId: req.userId } },
-        upsert: true
-      }
-    }));
-    await Attendance.bulkWrite(bulk);
-    res.json({ success: true, message: 'Attendance saved' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-router.get('/teacher/attendance', authMiddleware, requireRole('teacher'), async (req, res) => {
-  try {
-    const attendance = await Attendance.find({ teacherId: req.userId }).sort({ date: -1 });
-    res.json(attendance);
-  } catch (error) {
-    res.json([]);
-  }
-});
-
 // ==================== ASSIGNMENTS ====================
 router.get('/teacher/assignments', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
   try {
@@ -206,74 +151,6 @@ router.put('/teacher/assignments/:id/grade', authMiddleware, requireRole('teache
     await assignment.save();
 
     res.json({ success: true, assignment });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// ==================== LESSON PLANS ====================
-router.get('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
-  try {
-    let query = {};
-    if (req.userRole === 'teacher') {
-      query.teacherId = req.userId;
-    }
-    const lessonPlans = await LessonPlan.find(query).sort({ createdAt: -1 });
-    res.json(lessonPlans);
-  } catch (error) {
-    res.json([]);
-  }
-});
-
-router.post('/teacher/lesson-plans', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), uploadLesson.single('file'), async (req, res) => {
-  try {
-    const fileUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/lessons/${req.file.filename}` : null;
-
-    const lessonPlan = await LessonPlan.create({
-      title: req.body.title,
-      topic: req.body.topic,
-      objectives: req.body.objectives || '',
-      materials: req.body.materials || '',
-      fileUrl,
-      shareWithStudents: req.body.shareWithStudents === 'true',
-      teacherId: req.userId,
-      classId: req.body.classId || null,
-      subject: req.body.subject || '',
-      week: req.body.week || '',
-      term: req.body.term || '',
-      year: req.body.year ? Number(req.body.year) : undefined,
-      syllabusProgress: parseInt(req.body.syllabusProgress) || 0,
-      status: req.body.status === 'submitted' ? 'submitted' : 'draft'
-    });
-
-    res.json({ success: true, lessonPlan });
-  } catch (error) {
-    console.error('Create lesson plan error:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Teacher moves a plan from draft to submitted for academic admin review.
-router.put('/teacher/lesson-plans/:id/submit', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
-  try {
-    const plan = await LessonPlan.findById(req.params.id);
-    if (!plan) return res.status(404).json({ message: 'Lesson plan not found' });
-    if (req.userRole === 'teacher' && String(plan.teacherId) !== String(req.userId)) {
-      return res.status(403).json({ message: 'You can only submit your own lesson plans' });
-    }
-    if (plan.status === 'approved') {
-      return res.status(400).json({ message: 'This plan is already approved' });
-    }
-
-    ['title', 'topic', 'objectives', 'materials', 'classId', 'subject', 'week', 'term'].forEach(k => {
-      if (req.body[k] !== undefined) plan[k] = req.body[k];
-    });
-    if (req.body.year !== undefined) plan.year = Number(req.body.year) || undefined;
-    if (req.body.syllabusProgress !== undefined) plan.syllabusProgress = parseInt(req.body.syllabusProgress) || 0;
-    plan.status = 'submitted';
-    await plan.save();
-
-    res.json({ success: true, lessonPlan: plan });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -570,169 +447,6 @@ router.get('/teacher/gradebook', authMiddleware, requireRole('teacher', 'academi
   }
 });
 
-// Returns every student in the class for one day, each carrying whatever mark
-// already exists. The plain find() above omits students with no record, so a
-// register built from it would silently shrink as the day filled in and give no
-// way to tell "absent" from "nobody has got to this row yet".
-router.get('/teacher/attendance/register', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
-  try {
-    const { classId, date } = req.query;
-    if (!classId) return res.status(400).json({ message: 'classId is required' });
-
-    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
-    if (!isAdmin && !(await teacherOwnsClass(req.userId, classId))) {
-      return res.status(403).json({ message: 'You are not assigned to this class' });
-    }
-
-    let day = null;
-    if (date) {
-      day = new Date(date);
-      if (Number.isNaN(day.getTime())) return res.status(400).json({ message: 'Invalid date' });
-      day.setUTCHours(0, 0, 0, 0);
-    }
-
-    const students = await Student.find({ classId })
-      .select('fullName studentId')
-      .sort({ fullName: 1 });
-
-    let records = [];
-    if (day) {
-      records = await Attendance.find({ classId, date: day }).select('studentId status');
-    }
-    const byStudent = new Map(records.map(r => [String(r.studentId), r.status]));
-
-    res.json({
-      classId,
-      date: day,
-      students: students.map(s => ({
-        studentId: s._id,
-        fullName: s.fullName,
-        code: s.studentId,
-        // null means unmarked, which the UI renders differently from absent.
-        status: byStudent.has(String(s._id)) ? byStudent.get(String(s._id)) : null
-      }))
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Chronic-absence reporting. Scope is an explicit date range rather than a term
-// because Attendance carries no term field, and guessing term boundaries from
-// the academic year would silently misreport anyone marked outside the window.
-router.get('/teacher/attendance/analytics', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), async (req, res) => {
-  try {
-    const { classId, from, to, threshold } = req.query;
-    if (!classId) return res.status(400).json({ message: 'classId is required' });
-
-    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
-    if (!isAdmin && !(await teacherOwnsClass(req.userId, classId))) {
-      return res.status(403).json({ message: 'You are not assigned to this class' });
-    }
-
-    const start = new Date(from);
-    const end = new Date(to);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return res.status(400).json({ message: 'from and to are required as valid dates' });
-    }
-    start.setUTCHours(0, 0, 0, 0);
-    end.setUTCHours(23, 59, 59, 999);
-    if (start > end) return res.status(400).json({ message: 'from must not be after to' });
-
-    // A rate alone flags a student with three absences as badly as one with
-    // thirty, so a minimum number of recorded days is required before a
-    // chronic flag can be raised.
-    const rate = Number(threshold);
-    const minRate = Number.isFinite(rate) && rate > 0 && rate <= 100 ? rate : 75;
-    const MIN_DAYS = 10;
-
-    const [students, records] = await Promise.all([
-      Student.find({ classId }).select('fullName studentId').sort({ fullName: 1 }),
-      Attendance.find({ classId, date: { $gte: start, $lte: end } }).select('studentId status date')
-    ]);
-
-    const byStudent = new Map();
-    students.forEach(s => byStudent.set(String(s._id), {
-      studentId: s._id,
-      name: s.fullName,
-      code: s.studentId,
-      present: 0, absent: 0, late: 0, excused: 0, halfDay: 0, total: 0
-    }));
-    records.forEach(r => {
-      const bucket = byStudent.get(String(r.studentId));
-      if (!bucket) return;
-      bucket.total += 1;
-      const key = r.status === 'present' ? 'present'
-        : r.status === 'absent' ? 'absent'
-          : r.status === 'late' ? 'late'
-            : r.status === 'excused' ? 'excused'
-              : r.status === 'halfDay' ? 'halfDay' : null;
-      if (key) bucket[key] += 1;
-    });
-
-    const rows = [...byStudent.values()].map(b => {
-      const counted = b.present + b.absent + b.late + b.halfDay;
-      // Excused absences are excluded from the denominator: a student off sick
-      // with a note should not have it counted against their attendance.
-      const ratePct = counted > 0 ? Math.round((b.present / counted) * 100) : null;
-      return {
-        ...b,
-        attendanceRate: ratePct,
-        meetsMinimum: b.total >= MIN_DAYS,
-        chronic: counted > 0 && b.total >= MIN_DAYS && ratePct < minRate
-      };
-    });
-    rows.sort((a, b) => (a.attendanceRate ?? 101) - (b.attendanceRate ?? 101));
-
-    const withRecords = rows.filter(r => r.total > 0);
-    const classRate = withRecords.length
-      ? Math.round(withRecords.reduce((s, r) => s + (r.attendanceRate ?? 0), 0) / withRecords.length)
-      : null;
-
-    res.json({
-      classId,
-      from: start,
-      to: end,
-      threshold: minRate,
-      minDays: MIN_DAYS,
-      classRate,
-      students: rows,
-      summary: {
-        total: rows.length,
-        unmarked: rows.filter(r => r.total === 0).length,
-        chronic: rows.filter(r => r.chronic).length,
-        belowAverage: rows.filter(r => typeof r.attendanceRate === 'number' && classRate !== null && r.attendanceRate < classRate).length
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Declared last on purpose. Express matches routes in file order, so a
-// parameterised :classId registered above this would capture the literal
-// 'register' and 'analytics' segments and fail casting them to an ObjectId.
-router.get('/teacher/attendance/:classId', authMiddleware, async (req, res) => {
-  try {
-    const { date } = req.query;
-    const isAdmin = req.userRole === 'headmaster' || req.userRole === 'academic_admin';
-    if (!isAdmin && !(await teacherOwnsClass(req.userId, req.params.classId))) {
-      return res.status(403).json({ message: 'You are not assigned to this class' });
-    }
-    const query = { classId: req.params.classId };
-    if (date) {
-      const day = new Date(date);
-      if (Number.isNaN(day.getTime())) return res.status(400).json({ message: 'Invalid date' });
-      day.setUTCHours(0, 0, 0, 0);
-      query.date = day;
-    }
-    const attendance = await Attendance.find(query).populate('studentId', 'fullName studentId');
-    res.json(attendance);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
 // ==================== CLASS COMMUNICATION ====================
 
 // Nudges the class about an assignment. Staff may nudge any assignment; a
@@ -753,7 +467,7 @@ router.post('/teacher/assignments/:id/remind', authMiddleware, requireRole('teac
     const due = assignment.dueDate ? new Date(assignment.dueDate) : null;
     const reached = await notifyClass({
       classIds: [assignment.classId],
-      type: 'homework',
+      type: 'assignment',
       title: `Reminder: ${assignment.title}`,
       body: due && due.getTime() > Date.now()
         ? `Due ${due.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`

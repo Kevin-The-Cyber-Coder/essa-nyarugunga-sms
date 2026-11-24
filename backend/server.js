@@ -44,10 +44,8 @@ app.use('/api', apiLimiter);
 // ==================== ROUTES ====================
 app.use('/api', require('./routes/authRoutes'));
 app.use('/api', require('./routes/securityRoutes'));
-app.use('/api', require('./routes/healthRoutes'));
 app.use('/api', require('./routes/userRoutes'));
 app.use('/api', require('./routes/contactRoutes'));
-app.use('/api', require('./routes/subscriptionRoutes'));
 app.use('/api', require('./routes/announcementRoutes'));
 app.use('/api', require('./routes/classResourceRoutes'));
 app.use('/api', require('./routes/newsRoutes'));
@@ -62,24 +60,14 @@ app.use('/api', require('./routes/headmasterRoutes'));
 app.use('/api', require('./routes/adminAssistantRoutes'));
 app.use('/api', require('./routes/academicAdminRoutes'));
 app.use('/api', require('./routes/teacherRoutes'));
-app.use('/api', require('./routes/quizRoutes'));
-app.use('/api', require('./routes/progressRoutes'));
 app.use('/api', require('./routes/studentRoutes'));
 app.use('/api', require('./routes/parentRoutes'));
 app.use('/api', require('./routes/disciplineAdminRoutes'));
-app.use('/api', require('./routes/permissionRoutes'));
 app.use('/api', require('./routes/accountsRoutes'));
 app.use('/api', require('./routes/resourceUploadRoutes'));
 app.use('/api', require('./routes/notificationRoutes'));
-app.use('/api', require('./routes/calendarRoutes'));
 app.use('/api', require('./routes/subjectRoutes'));
-app.use('/api', require('./routes/timetableRoutes'));
 app.use('/api', require('./routes/examRoutes'));
-app.use('/api', require('./routes/reportCardRoutes'));
-app.use('/api', require('./routes/enrollmentRoutes'));
-app.use('/api', require('./routes/lessonPlanRoutes'));
-app.use('/api', require('./routes/analyticsRoutes'));
-app.use('/api', require('./routes/sdmsRoutes'));
 
 // ==================== ERROR HANDLER ====================
 app.use(errorHandler);

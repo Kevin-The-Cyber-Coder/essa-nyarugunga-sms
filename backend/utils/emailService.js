@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 
 const emailTransporter = require('../config/email');
-const Subscription = require('../models/Subscription');
 const { getJWTSecret } = require('./jwt');
 
 const buildSetupLink = (userId) => {
@@ -36,21 +35,6 @@ const sendWelcomeEmail = async (user) => {
         <p>Best regards,<br><strong>ESSA Nyarugunga Administration</strong></p>
       </div></div>`
   });
-};
-
-const sendNewsNotificationEmail = async (news) => {
-  if (!process.env.EMAIL_USER) return;
-  const subscribers = await Subscription.find({ isActive: true });
-  for (const sub of subscribers) {
-    await emailTransporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: sub.email,
-      subject: `📰 New: ${news.title} - ESSA Nyarugunga`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-        <div style="background:linear-gradient(135deg,#1a3a5c,#2c5f8a);color:white;padding:20px;text-align:center;"><h2>📢 New Update</h2></div>
-        <div style="padding:20px;"><h3>${news.title}</h3><p>${news.summary}</p></div></div>`
-    }).catch(console.error);
-  }
 };
 
 const sendAdmissionConfirmationEmail = async (application) => {
@@ -144,5 +128,5 @@ const sendNotificationEmail = async (user, { title, body, link }) => {
   return true;
 };
 
-const module_exports = { sendWelcomeEmail, sendNewsNotificationEmail, sendAdmissionConfirmationEmail, sendAdmissionDecisionEmail, sendNotificationEmail };
+const module_exports = { sendWelcomeEmail, sendAdmissionConfirmationEmail, sendAdmissionDecisionEmail, sendNotificationEmail };
 module.exports = module_exports;
