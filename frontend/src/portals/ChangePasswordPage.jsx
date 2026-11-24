@@ -101,7 +101,7 @@ const ChangePasswordPage = () => {
         <h1>{isFirstLogin ? 'Choose your password' : 'Change your password'}</h1>
         <p className="change-password-lead">
           {isFirstLogin
-            ? `Welcome, ${userName}. Your SDMS code gets you this far, but it is not a secret you should keep using. Set a password of your own to finish signing in.`
+            ? `Welcome, ${userName}. Set a password of your own to finish signing in and keep your account secure.`
             : 'You must set a new password before you can continue.'}
         </p>
 

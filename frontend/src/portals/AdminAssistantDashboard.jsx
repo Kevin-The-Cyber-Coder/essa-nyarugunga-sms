@@ -130,7 +130,7 @@ const AdminAssistantDashboard = () => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Could not register student');
-      Swal.fire('Registered', `Student created. SDMS code: ${data.sdmsCode}`, 'success');
+      Swal.fire('Registered', 'Student account created successfully.', 'success');
       await load();
     } catch (error) { Swal.fire('Error', error.message, 'error'); }
   };

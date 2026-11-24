@@ -9,13 +9,11 @@ const BG =
 
 const TABS = [
   { id: 'email', label: 'Email', icon: 'fa-envelope' },
-  { id: 'sdms', label: 'Student', icon: 'fa-id-card' },
   { id: 'otp', label: 'Parent', icon: 'fa-mobile-screen-button' },
 ];
 
 const COPY = {
   email: ['Sign in', 'Use the email address and password linked to your school account.'],
-  sdms: ['Student sign in', 'Enter the SDMS code printed on your student card.'],
   otp: ['Parent sign in', 'We send a 6-digit code to the phone number the school has on file.'],
 };
 
@@ -115,9 +113,6 @@ const PortalLogin = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  const [sdmsCode, setSdmsCode] = useState('');
-  const [sdmsPassword, setSdmsPassword] = useState('');
-
   const [otpPhone, setOtpPhone] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -171,23 +166,6 @@ const PortalLogin = () => {
       else store.remove('rememberedEmail');
 
       navigate(data.mustChangePassword ? '/portal/change-password' : (ROLE_ROUTES[normalizeRole(data.role)] || '/portal/login'));
-    });
-  };
-
-  /* Student (SDMS) */
-  const handleSdmsLogin = (e) => {
-    e.preventDefault();
-    if (!sdmsCode.trim()) { setError('Enter the SDMS code from your student card.'); return; }
-    run(async () => {
-      const { ok, data } = await post('/api/auth/student/login', {
-        sdmsCode: sdmsCode.trim(),
-        password: sdmsPassword || undefined,
-      });
-      if (!ok) { setError(data.message || 'That SDMS code or password is not correct.'); return; }
-
-      saveSession(data);
-      store.set('mustSetPassword', data.mustSetPassword ? 'true' : 'false');
-      navigate(data.mustSetPassword || data.mustChangePassword ? '/portal/change-password' : '/portal/student');
     });
   };
 
@@ -262,7 +240,7 @@ const PortalLogin = () => {
               Official School Portal
             </span>
 
-            <h2>Grades, attendance and school news in one place.</h2>
+            <h2>Grades and school news in one place.</h2>
             <p>
               Students, parents and staff each have their own way in — pick the right tab
               and sign in with the credentials the school gave you.
@@ -273,7 +251,7 @@ const PortalLogin = () => {
               <li>
                 <i className="fas fa-chart-line" aria-hidden="true" />
                 <div>
-                  <strong>Live results &amp; attendance</strong>
+                  <strong>Live grades</strong>
                   <span>See updates the moment teachers post them</span>
                 </div>
               </li>
@@ -288,7 +266,7 @@ const PortalLogin = () => {
                 <i className="fas fa-bell" aria-hidden="true" />
                 <div>
                   <strong>School announcements</strong>
-                  <span>Events, exams and closures delivered in the portal</span>
+                  <span>Exams and closures delivered in the portal</span>
                 </div>
               </li>
               <li>
@@ -304,7 +282,7 @@ const PortalLogin = () => {
             <div className="pl-stats" role="list" aria-label="Portal facts">
               <div role="listitem">
                 <strong>800+</strong>
-                <span>Students enrolled</span>
+                <span>Students</span>
               </div>
               <div role="listitem">
                 <strong>30+</strong>
@@ -320,7 +298,7 @@ const PortalLogin = () => {
             <div className="pl-support">
               <i className="fas fa-headset" aria-hidden="true" />
               <p>
-                Locked out or lost your SDMS card?{' '}
+                Locked out of your account?{' '}
                 <Link to="/contact">Contact the school office</Link> — we'll help you get back in.
               </p>
             </div>
@@ -397,24 +375,6 @@ const PortalLogin = () => {
                 </label>
 
                 <SubmitButton loading={loading} loadingText="Signing in…">Sign in</SubmitButton>
-              </form>
-            )}
-
-            {mode === 'sdms' && (
-              <form onSubmit={handleSdmsLogin} noValidate className="pl-form">
-                <Field id="sdmsCode" label="SDMS code" icon="fa-id-card" hint="Printed on the front of your student card.">
-                  <input
-                    id="sdmsCode" type="text" placeholder="A3F9-K2M7"
-                    value={sdmsCode} onChange={(e) => setSdmsCode(e.target.value.toUpperCase())}
-                    autoComplete="off" autoCapitalize="characters" spellCheck="false"
-                  />
-                </Field>
-
-                <Field id="sdmsPassword" label="Password" icon="fa-lock" hint="First time signing in? Leave this empty. You will choose a password next.">
-                  <PasswordInput id="sdmsPassword" value={sdmsPassword} onChange={(e) => setSdmsPassword(e.target.value)} placeholder="Leave empty on first login" autoComplete="current-password" />
-                </Field>
-
-                <SubmitButton loading={loading} loadingText="Signing in…">Continue</SubmitButton>
               </form>
             )}
 
@@ -577,7 +537,7 @@ const PortalLogin = () => {
         .pl-card h1 { font-size: clamp(1.25rem, .9rem + 1.4vh, 1.6rem); font-weight: 800; letter-spacing: -.02em; color: var(--navy); }
         .pl-sub { margin-top: .35rem; color: var(--muted); font-size: .9rem; line-height: 1.5; }
 
-        .pl-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: clamp(.7rem, 2.6vh, 1.5rem) 0 clamp(.6rem, 2vh, 1.25rem); padding: 4px; background: #eef1f6; border-radius: 12px; }
+        .pl-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin: clamp(.7rem, 2.6vh, 1.5rem) 0 clamp(.6rem, 2vh, 1.25rem); padding: 4px; background: #eef1f6; border-radius: 12px; }
         .pl-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: clamp(36px, 5.6vh, 44px); padding: 6px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; transition: background .15s, color .15s; }
         .pl-tabs button:hover { color: var(--navy); }
         .pl-tabs button.active { background: #fff; color: var(--navy); box-shadow: 0 1px 4px rgba(15,23,42,.14); }
