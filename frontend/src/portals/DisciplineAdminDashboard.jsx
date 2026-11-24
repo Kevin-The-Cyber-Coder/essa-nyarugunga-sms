@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
-import { openPrintableDocument } from '../utils/printDocument';
 import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -12,20 +11,7 @@ const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: 
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-RW', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour: '2-digit', minute: '2-digit' }) : '';
 
-const roleBadge = (role) => {
-  const map = {
-    headmaster: { label: 'Headmaster', color: '#ffc107', bg:'var(--tint-amber)' },
-    academic_admin: { label: 'Academic Admin', color: '#27ae60', bg:'var(--tint-success)' },
-    discipline_admin: { label: 'Discipline Admin', color: '#e74c3c', bg:'var(--tint-danger)' },
-    accounts_admin: { label: 'Accounts Admin', color: '#3498db', bg:'var(--tint-primary)' },
-    teacher: { label: 'Teacher', color: '#9b59b6', bg:'var(--tint-purple)' },
-    student: { label: 'Student', color: '#1abc9c', bg:'var(--tint-info)' },
-    parent: { label: 'Parent', color: '#e67e22', bg:'var(--tint-warning)' },
-  };
-  return map[role] || { label: role || '—', color:'var(--text-secondary)', bg:'var(--surface-page)' };
-};
 
 // ─── shared UI atoms ─────────────────────────────────────────────────────────
 const Badge = ({ text, color, bg, size = 11 }) => (
@@ -187,7 +173,6 @@ const DisciplineAdminDashboard = () => {
 
   // data
   const [disciplineCases, setDisciplineCases] = useState([]);
-  const [permissions, setPermissions] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -196,15 +181,11 @@ const DisciplineAdminDashboard = () => {
   
   // modals
   const [incidentModal, setIncidentModal] = useState(false);
-  const [permissionModal, setPermissionModal] = useState(false);
   const [announcementModal, setAnnouncementModal] = useState(false);
   
   // forms
   const [incidentForm, setIncidentForm] = useState({
     studentId: '', category: '', description: '', severity: 'moderate', evidence: ''
-  });
-  const [permissionForm, setPermissionForm] = useState({
-    studentId: '', type: 'medical', reason: '', fromDate: '', toDate: '', attachment: ''
   });
   const [announcementForm, setAnnouncementForm] = useState({
     title: '', content: '', audience: 'all', priority: 'normal'
@@ -240,7 +221,7 @@ const DisciplineAdminDashboard = () => {
   }, []);
 
   const loadAll = () => Promise.all([
-    fetchDisciplineCases(), fetchPermissions(), fetchAnnouncements(),
+    fetchDisciplineCases(), fetchAnnouncements(),
     fetchStudents(), fetchClasses(), fetchTeachers()
   ]).finally(() => setLoading(false));
 
@@ -253,7 +234,6 @@ const DisciplineAdminDashboard = () => {
     setDisciplineStats({ total: cases.length, pending, resolved, suspended, probation: 0 });
   }).catch(() => setDisciplineCases([]));
   
-  const fetchPermissions = () => api('/permissions').then(d => setPermissions(Array.isArray(d) ? d : [])).catch(() => setPermissions([]));
   const fetchAnnouncements = () => api('/announcements').then(d => setAnnouncements(Array.isArray(d) ? d : [])).catch(() => setAnnouncements([]));
   const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => setStudents([]));
   const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => setClasses([]));
@@ -330,69 +310,6 @@ const DisciplineAdminDashboard = () => {
     } catch (e) { Swal.fire('Error', e.message, 'error'); }
   };
   
-  const processPermission = async (permission, status) => {
-  const isReject = status === 'rejected';
-  const result = await Swal.fire({
-    title: `${isReject ? 'Reject' : 'Approve'} Permission Request`,
-    text: `${permission.requesterName} - ${permission.reason || permission.type}`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: isReject ? '❌ Reject' : '✅ Approve',
-    confirmButtonColor: isReject ? '#e74c3c' : '#27ae60',
-    ...(isReject && { input: 'textarea', inputLabel: 'Reason for rejection' })
-  });
-  if (!result.isConfirmed) return;
-  
-  try {
-    await api(`/permissions/${permission._id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status, rejectionReason: result.value || '' })
-    });
-    Swal.fire({
-      title: `${isReject ? 'Rejected' : 'Approved'}!`,
-      text: isReject ? 'The request has been rejected.' : 'Permission request approved.',
-      icon: 'success',
-      showConfirmButton: true,
-      confirmButtonText: 'OK'
-    });
-    
-    // If approved, ask if user wants to print permission slip
-    if (!isReject) {
-  const printResult = await Swal.fire({
-    title: 'Print Permission Slip?',
-    text: 'Would you like to generate and print the permission slip now?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: '🖨️ Yes, Print Slip',
-    cancelButtonText: 'Later',
-    confirmButtonColor: '#3498db'
-  });
-  
-  if (printResult.isConfirmed) {
-    // The token used to be appended to the URL as ?token=..., which put a live
-    // session token into browser history, the server access log and any Referer
-    // the slip page later sent. The header-based helper keeps it out of all of
-    // those.
-    try {
-      await openPrintableDocument(
-        `/permissions/${permission._id}/slip`,
-        API_URL,
-        'Permission Slip — ESSA Nyarugunga'
-      );
-    } catch (e) {
-      Swal.fire(
-        /pop-?up/i.test(e.message || '') ? 'Popup Blocked' : 'Cannot open slip',
-        e.message || 'The permission slip could not be opened',
-        'warning'
-      );
-    }
-  }
-}
-    fetchPermissions();
-  } catch (e) { 
-    Swal.fire('Error', e.message, 'error'); 
-  }
-};
   const postAnnouncement = async () => {
     if (!announcementForm.title || !announcementForm.content) {
       Swal.fire('Missing Fields', 'Title and content required', 'warning');
@@ -412,29 +329,6 @@ const DisciplineAdminDashboard = () => {
     finally { setSaving(false); }
   };
   
-  const requestPermission = async () => {
-    if (!permissionForm.type || !permissionForm.reason) {
-      Swal.fire('Missing Fields', 'Please fill required fields', 'warning');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api('/permissions', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: permissionForm.type,
-          reason: permissionForm.reason,
-          fromDate: permissionForm.fromDate,
-          toDate: permissionForm.toDate
-        })
-      });
-      Swal.fire('✅ Request Submitted!', 'Your permission request has been sent to Headmaster', 'success');
-      setPermissionModal(false);
-      setPermissionForm({ studentId: '', type: 'medical', reason: '', fromDate: '', toDate: '', attachment: '' });
-    } catch (e) { Swal.fire('Error', e.message, 'error'); }
-    finally { setSaving(false); }
-  };
-
   const filteredCases = disciplineCases.filter(c => {
     if (caseFilter !== 'all' && c.status !== caseFilter) return false;
     if (classFilter && c.className !== classFilter) return false;
@@ -442,14 +336,12 @@ const DisciplineAdminDashboard = () => {
     return true;
   });
   
-  const pendingPermissions = permissions.filter(p => p.status === 'pending').length;
   const pendingCases = disciplineCases.filter(c => c.status === 'pending').length;
   const resolvedCases = disciplineCases.filter(c => c.status === 'resolved').length;
 
   const menuItems = [
     { id: 'overview', label: 'Dashboard', icon: 'fas fa-chart-line' },
     { id: 'cases', label: 'Discipline Cases', icon: 'fas fa-gavel', badge: pendingCases },
-    { id: 'permissions', label: 'Permission Requests', icon: 'fas fa-file-signature', badge: pendingPermissions },
     { id: 'students', label: 'Students', icon: 'fas fa-user-graduate' },
     { id: 'announcements', label: 'Announcements', icon: 'fas fa-bullhorn' },
     { id: 'content', label: 'Website content', icon: 'fas fa-newspaper' },
@@ -524,9 +416,6 @@ const DisciplineAdminDashboard = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ThemeToggle color="#1a3a5c" border="#e5e7eb" />
-            <button onClick={() => setPermissionModal(true)} style={{ background:'var(--tint-danger)', border: 'none', padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, color: '#e74c3c', cursor: 'pointer' }}>
-              <i className="fas fa-file-alt" style={{ marginRight: 5 }} /> Request Permission
-            </button>
             <Avatar name={userName} size={32} />
             <div className="hide-mobile">
               <div style={{ fontSize: 12, fontWeight: 600, color:'var(--text-body)' }}>{userName}</div>
@@ -556,9 +445,8 @@ const DisciplineAdminDashboard = () => {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14, marginBottom: 20 }}>
                 <StatCard icon="fas fa-clock" label="Pending Cases" value={pendingCases} sub="Awaiting review" accent="#f39c12" bg="#fff3e0" onClick={() => setActiveTab('cases')} />
                 <StatCard icon="fas fa-check-circle" label="Resolved Cases" value={resolvedCases} sub="Completed" accent="#27ae60" bg="#e8f5e9" onClick={() => setActiveTab('cases')} />
-                <StatCard icon="fas fa-file-signature" label="Permission Requests" value={pendingPermissions} sub="Pending approval" accent="#3498db" bg="#e3f2fd" onClick={() => setActiveTab('permissions')} />
                 <StatCard icon="fas fa-ban" label="Suspensions" value={disciplineStats.suspended || 0} sub="Active" accent="#e74c3c" bg="#fdecea" />
-                <StatCard icon="fas fa-users" label="Total Students" value={students.length} sub="Enrolled" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('students')} />
+                <StatCard icon="fas fa-users" label="Total Students" value={students.length} sub="Active students" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('students')} />
               </div>
               
               {/* Quick Actions */}
@@ -620,76 +508,10 @@ const DisciplineAdminDashboard = () => {
             </div>
           )}
 
-          {/* ══ PERMISSION REQUESTS ══ */}
-{activeTab === 'permissions' && (
-  <div>
-    <div style={{ marginBottom: 18 }}>
-      <h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Permission Requests</h2>
-      <p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>
-        {pendingPermissions} pending · {permissions.filter(p => p.status === 'approved').length} approved · {permissions.filter(p => p.status === 'rejected').length} rejected
-      </p>
-    </div>
-    <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-      <Table 
-        cols={['Requester', 'Type', 'Reason', 'Date Range', 'Status', 'Actions']} 
-        emptyMsg="No permission requests"
-        rows={permissions.map(p => (
-          <>
-            <TD>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{p.requesterName}</div>
-              <div style={{ fontSize: 11, color:'var(--text-faint)' }}>{roleBadge(p.requesterRole).label}</div>
-            </TD>
-            <TD><Badge text={p.type} color="#3498db" bg="#e3f2fd" /></TD>
-            <TD style={{ fontSize: 12, maxWidth: 200 }}>{p.reason || '—'}</TD>
-            <TD style={{ fontSize: 12 }}>{fmt(p.fromDate)} - {fmt(p.toDate)}</TD>
-            <TD>
-              <Badge 
-                text={p.status} 
-                color={p.status === 'pending' ? '#f39c12' : p.status === 'approved' ? '#27ae60' : '#e74c3c'} 
-                bg={p.status === 'pending' ? '#fff3e0' : p.status === 'approved' ? '#e8f5e9' : '#fdecea'} 
-              />
-            </TD>
-            <TD>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {p.status === 'pending' && (
-                  <>
-                    <Btn small onClick={() => processPermission(p, 'approved')} color="#27ae60">Approve</Btn>
-                    <Btn small onClick={() => processPermission(p, 'rejected')} danger>Reject</Btn>
-                  </>
-                )}
-                {p.status === 'approved' && (
-                  <Btn 
-                    small 
-                    icon="fas fa-print" 
-                    color="#3498db" 
-                    onClick={() => {
-                      openPrintableDocument(
-                        `/permissions/${p._id}/slip`,
-                        API_URL,
-                        'Permission Slip — ESSA Nyarugunga'
-                      ).catch((e) => Swal.fire(
-                        /pop-?up/i.test(e.message || '') ? 'Popup Blocked' : 'Cannot open slip',
-                        e.message || 'The permission slip could not be opened',
-                        'warning'
-                      ));
-                    }}
-                  >
-                    Print Slip
-                  </Btn>
-                )}
-              </div>
-            </TD>
-          </>
-        ))}
-      />
-    </div>
-  </div>
-)}
-
           {/* ══ STUDENTS VIEWER ══ */}
           {activeTab === 'students' && (
             <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Student Directory</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{students.length} students enrolled</p></div>
+              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Student Directory</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{students.length} students</p></div>
               <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
                 <Table cols={['Student', 'Class', 'Parent', 'Contact', 'Status', 'Actions']} emptyMsg="No students found"
                   rows={students.map(s => {
@@ -812,30 +634,6 @@ const DisciplineAdminDashboard = () => {
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
           <Btn onClick={() => setIncidentModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
           <Btn onClick={reportIncident} icon="fas fa-exclamation-triangle" color="#e74c3c" disabled={saving}>{saving ? 'Reporting…' : 'Report Incident'}</Btn>
-        </div>
-      </Modal>
-
-      {/* Permission Request Modal (for admin to request from headmaster) */}
-      <Modal open={permissionModal} onClose={() => setPermissionModal(false)} title="Request Permission" width={500}>
-        <Field label="Request Type" required>
-          <Sel value={permissionForm.type} onChange={e => setPermissionForm(p => ({ ...p, type: e.target.value }))}>
-            <option value="medical">🏥 Medical Appointment</option>
-            <option value="emergency">🚨 Family Emergency</option>
-            <option value="travel">✈️ Travel Permission</option>
-            <option value="bereavement">💔 Bereavement</option>
-            <option value="other">📋 Other</option>
-          </Sel>
-        </Field>
-        <Field label="Reason" required>
-          <Txt value={permissionForm.reason} rows={3} placeholder="Explain why you need permission..." onChange={e => setPermissionForm(p => ({ ...p, reason: e.target.value }))} />
-        </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="From Date" required><Inp type="date" value={permissionForm.fromDate} onChange={e => setPermissionForm(p => ({ ...p, fromDate: e.target.value }))} /></Field>
-          <Field label="To Date" required><Inp type="date" value={permissionForm.toDate} onChange={e => setPermissionForm(p => ({ ...p, toDate: e.target.value }))} /></Field>
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-          <Btn onClick={() => setPermissionModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-          <Btn onClick={requestPermission} icon="fas fa-paper-plane" color="#3498db" disabled={saving}>{saving ? 'Submitting…' : 'Submit Request'}</Btn>
         </div>
       </Modal>
 

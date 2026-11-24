@@ -78,12 +78,12 @@ export const ClassAnnouncementsPanel = () => {
   const [notices, setNotices] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  // The same scoped class list the progress page uses, so a teacher is never
-  // offered a form they cannot post to.
+  // The same scoped class list the teacher dashboard uses, so a teacher is
+  // never offered a form they cannot post to.
   const loadClasses = useCallback(async () => {
     try {
-      const d = await api('/teacher/progress/classes');
-      setClasses(Array.isArray(d.classes) ? d.classes : []);
+      const d = await api('/academic-admin/classes');
+      setClasses(Array.isArray(d) ? d : []);
     } catch { setClasses([]); }
   }, []);
 
@@ -101,7 +101,10 @@ export const ClassAnnouncementsPanel = () => {
   useEffect(() => { loadClasses(); loadNotices(); }, [loadClasses, loadNotices]);
 
   const labelFor = (ids) => (ids || [])
-    .map((id) => classes.find((c) => c._id === id)?.label)
+    .map((id) => {
+      const cls = classes.find((c) => c._id === id);
+      return cls?.label || `${cls?.grade || ''} ${cls?.className || ''}`.trim();
+    })
     .filter(Boolean)
     .join(', ') || 'a form';
 

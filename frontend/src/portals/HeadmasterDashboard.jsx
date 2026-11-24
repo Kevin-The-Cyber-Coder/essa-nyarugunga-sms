@@ -14,7 +14,6 @@ const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bea
 
 // ─── tiny helpers ────────────────────────────────────────────────────────────
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-RW', { day:'2-digit', month:'short', year:'numeric' }) : '—';
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour:'2-digit', minute:'2-digit' }) : '';
 const roleBadge = (role) => {
   const map = {
     headmaster:      { label:'Headmaster',     color:'#ffc107', bg:'var(--tint-amber)' },
@@ -226,20 +225,6 @@ const HeadmasterDashboard = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [disciplineCases, setDisciplineCases] = useState([]);
   const [disciplineStats, setDisciplineStats] = useState({ total: 0, pending: 0, resolved: 0 });
-  const [permissions, setPermissions]   = useState([]);
-
-  // ─── security trail ───
-  const [loginAttempts, setLoginAttempts] = useState([]);
-  const [loginTotal, setLoginTotal]     = useState(0);
-  const [loginPage, setLoginPage]       = useState(1);
-  const [loginPages, setLoginPages]     = useState(1);
-  const [secHours, setSecHours]         = useState(24);
-  const [lockedAccounts, setLockedAccounts] = useState([]);
-  const [lockPolicy, setLockPolicy]     = useState(null);
-  const [topFailingIps, setTopFailingIps] = useState([]);
-  const [secLoading, setSecLoading]     = useState(false);
-
-
   // ─── modals
   const [adminModal, setAdminModal]     = useState(false);
   const [annoModal, setAnnoModal]       = useState(false);
@@ -267,14 +252,6 @@ const HeadmasterDashboard = () => {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // The security screens are loaded on demand rather than with refreshAll, since
-  // neither is needed on every page view and one is a heavier aggregate query.
-  useEffect(() => {
-if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
-        if (activeTab === 'security-locked') fetchLocked();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, secHours]);
-
   // ─── auth guard
   useEffect(() => {
     const token = getToken();
@@ -282,7 +259,7 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     if (!token || role !== 'headmaster') { navigate('/portal/login'); return; }
     Promise.all([
       fetchStats(), fetchAdmins(), fetchAnnouncements(),
-      fetchDiscipline(), fetchPermissions(),
+      fetchDiscipline(),
     ]).finally(() => setLoading(false));
   }, [navigate]);
 
@@ -331,79 +308,11 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
       });
   };
 
-  const fetchPermissions = () => {
-    api('/permissions')
-      .then(d => setPermissions(Array.isArray(d) ? d : []))
-      .catch(() => setPermissions([]));
-  };
-
-  // ─── sign-in security trail ────────────────────────────────────────────────
-  // The page and hour window are taken as arguments rather than read from state.
-  // React state updates are asynchronous, so a click handler that did
-  // setLoginPage(3); fetchLoginTrail(3) would still build the request from the
-  // previous loginPage and silently re-fetch the page the user just left. Both
-  // buttons on this screen were affected, and they appeared to do nothing.
-  const fetchLoginTrail = (page = loginPage, hours = secHours) => {
-    const target = Math.max(1, Number(page) || 1);
-    setSecLoading(true);
-    api(`/security/login-attempts?hours=${hours}&page=${target}&limit=25`)
-      .then(d => {
-        setLoginAttempts(Array.isArray(d?.attempts) ? d.attempts : []);
-        setLoginPages(d?.pagination?.pages || 1);
-        setLoginTotal(d?.pagination?.total || 0);
-        if (target !== loginPage) setLoginPage(target);
-      })
-      .catch(() => setLoginAttempts([]))
-      .finally(() => setSecLoading(false));
-  };
-
-  const fetchLocked = () => {
-    setSecLoading(true);
-    api('/security/locked-accounts')
-      .then(d => {
-        setLockedAccounts(Array.isArray(d?.locked) ? d.locked : []);
-        setLockPolicy(d?.policy || null);
-        setTopFailingIps(Array.isArray(d?.topFailingIps) ? d.topFailingIps : []);
-      })
-      .catch(() => setLockedAccounts([]))
-      .finally(() => setSecLoading(false));
-  };
-
-  // The lockout policy explains what the sign-in history is showing, but it
-  // arrives with the locked-account payload, which only ever ran on the Locked
-  // Accounts tab. The note was therefore dead on the screen that displays it.
-  // Taken on its own so it can be fetched without also loading the account list.
-  const fetchLockPolicy = () => {
-    api('/security/locked-accounts')
-      .then(d => setLockPolicy(d?.policy || null))
-      .catch(() => setLockPolicy(null));
-  };
-
-  const unlockAccount = async (acct) => {
-    const ok = await Swal.fire({
-      title: 'Unlock account?',
-      text: `${acct.name} (${acct.email}) will be able to sign in again immediately.`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Unlock',
-      confirmButtonColor:'var(--navy)'
-    });
-    if (!ok.isConfirmed) return;
-    try {
-      const r = await api(`/security/unlock/${acct.id}`, { method: 'POST' });
-      Swal.fire('Unlocked', r?.message || 'Account unlocked', 'success');
-      fetchLocked();
-    } catch (e) {
-      Swal.fire('Error', e.message || 'Could not unlock account', 'error');
-    }
-  };
-
   const refreshAll = () => {
     fetchStats();
     fetchAdmins();
     fetchAnnouncements();
     fetchDiscipline();
-    fetchPermissions();
   };
 
   // ─── CRUD actions ──────────────────────────────────────────────────────────
@@ -524,31 +433,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     }
   };
 
-  const permissionAction = async (p, status) => {
-    const isReject = status === 'rejected';
-    const result = await Swal.fire({
-      title: `${isReject ? 'Reject' : 'Approve'} Permission?`,
-      text: `${p.requesterName} — ${p.reason || p.type}`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: isReject ? '❌ Reject' : '✅ Approve',
-      confirmButtonColor: isReject ? '#e74c3c' : '#27ae60',
-      ...(isReject && { input: 'textarea', inputLabel: 'Reason for rejection (optional)' }),
-    });
-    if (!result.isConfirmed) return;
-    try {
-      await api(`/permissions/${p._id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status, rejectionReason: result.value || '' })
-      });
-      Swal.fire(`${isReject ? 'Rejected' : 'Approved'}!`, '', 'success');
-      fetchPermissions();
-      fetchStats();
-    } catch (e) {
-      Swal.fire('Error', e.message || 'Failed to update permission', 'error');
-    }
-  };
-
   const saveProfile = async () => {
     setSaving(true);
     try {
@@ -587,9 +471,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
   };
 
   // ─── menu items ────────────────────────────────────────────────────────────
-  // Grouped rather than flat so the sign-in trail has somewhere to live without
-  // pushing the portal past its seven tabs. Every previous screen is still
-  // reachable; the security trail is simply a second leaf under Security.
   const navGroups = [
     { id: 'g-dash',     label: 'Dashboard',     icon: 'fas fa-chart-line',    items: [
       { id: 'overview', label: 'Overview', icon: 'fas fa-chart-line' },
@@ -602,15 +483,10 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
     ]},
     { id: 'g-approvals', label: 'Approvals',    icon: 'fas fa-file-signature', items: [
       { id: 'applications', label: 'Admissions', icon: 'fas fa-file-circle-check' },
-      { id: 'permissions', label: 'Permissions', icon: 'fas fa-file-signature' },
     ]},
     { id: 'g-comms',    label: 'Communication', icon: 'fas fa-bullhorn',      items: [
       { id: 'announcements', label: 'Announcements', icon: 'fas fa-bullhorn' },
       { id: 'website', label: 'Website content', icon: 'fas fa-newspaper' },
-    ]},
-    { id: 'g-security', label: 'Security',      icon: 'fas fa-shield-alt',    items: [
-      { id: 'security-logins',  label: 'Sign-in History',   icon: 'fas fa-clock-rotate-left' },
-      { id: 'security-locked',  label: 'Locked Accounts',   icon: 'fas fa-lock' },
     ]},
     { id: 'g-account',  label: 'My Account',    icon: 'fas fa-user-shield',   items: [
       { id: 'profile', label: 'My Profile', icon: 'fas fa-user-shield' },
@@ -790,11 +666,8 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
                 <StatCard icon="fas fa-gavel" label="Discipline Cases" value={disciplineStats.total || 0}
                   sub={`${disciplineStats.pending || 0} pending review`} accent="#9b59b6" bg="#f3e5f5"
                   onClick={() => setActiveTab('discipline')} />
-                <StatCard icon="fas fa-file-signature" label="Permissions" value={permissions.length}
-                  sub={`${permissions.filter(p => p.status === 'pending').length} awaiting`} accent="#3498db" bg="#e3f2fd"
-                  onClick={() => setActiveTab('permissions')} />
                 <StatCard icon="fas fa-user-graduate" label="Students" value={stats.totalStudents || 0}
-                  sub="enrolled & active" accent="#1abc9c" bg="#e0f7fa" />
+                  sub="Active students" accent="#1abc9c" bg="#e0f7fa" />
                 <StatCard icon="fas fa-chalkboard-teacher" label="Teachers" value={stats.totalTeachers || 0}
                   sub={`${stats.totalClasses || 0} classes`} accent="#e67e22" bg="#fff3e0" />
               </div>
@@ -827,34 +700,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
                   )}
                 </div>
 
-                {/* Pending permissions */}
-                <div style={{ background:'var(--surface-card)', borderRadius:16, padding:'20px', boxShadow:'0 2px 12px rgba(0,0,0,.06)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-                    <h3 style={{ margin:0, fontSize:14, fontWeight:600, color:'var(--navy)', display:'flex', alignItems:'center', gap:8 }}>
-                      <i className="fas fa-file-signature" style={{ color:'#3498db' }} /> Pending Permissions
-                    </h3>
-                    <Badge text={`${permissions.filter(p => p.status === 'pending').length} open`} color="#3498db" bg="#e3f2fd" />
-                  </div>
-                  {permissions.filter(p => p.status === 'pending').slice(0, 5).map(p => (
-                    <div key={p._id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
-                      padding:'10px 0', borderBottom:'1px solid var(--surface-muted)', gap:10 }}>
-                      <div>
-                        <div style={{ fontSize:13, fontWeight:600, color:'var(--text-body)' }}>{p.requesterName}</div>
-                        <div style={{ fontSize:11, color:'var(--text-faint)', marginTop:2 }}>{p.type} · {fmt(p.createdAt)}</div>
-                      </div>
-                      <div style={{ display:'flex', gap:6, flexShrink:0 }}>
-                        <Btn small onClick={() => permissionAction(p, 'approved')} color="#27ae60">✓</Btn>
-                        <Btn small onClick={() => permissionAction(p, 'rejected')} danger>✗</Btn>
-                      </div>
-                    </div>
-                  ))}
-                  {permissions.filter(p => p.status === 'pending').length === 0 && (
-                    <div style={{ textAlign:'center', padding:'24px 0', color:'var(--text-faint-2)', fontSize:13 }}>
-                      <i className="fas fa-check-circle" style={{ fontSize:28, marginBottom:8, display:'block', color:'#27ae60' }} />
-                      No pending permissions
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}
@@ -1016,196 +861,6 @@ if (activeTab === 'security-logins') { fetchLoginTrail(1); fetchLockPolicy(); }
             </div>
           )}
 
-          {/* ╔══ PERMISSIONS ══╗ */}
-          {activeTab === 'permissions' && (
-            <div>
-              <div style={{ marginBottom: 20 }}>
-                <h2 style={{ margin: 0, fontSize: 20, color:'var(--navy)', fontFamily: "'Crimson Text', Georgia, serif" }}>Permission Requests</h2>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color:'var(--text-faint)' }}>Approve or reject submitted permission requests</p>
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-                {[
-                  ['Pending', permissions.filter(p => p.status === 'pending').length, '#f39c12', '#fff3e0'],
-                  ['Approved', permissions.filter(p => p.status === 'approved').length, '#27ae60', '#e8f5e9'],
-                  ['Rejected', permissions.filter(p => p.status === 'rejected').length, '#e74c3c', '#fdecea'],
-                ].map(([l, v, c, bg]) => (
-                  <div key={l} style={{ background: bg, borderRadius: 12, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: c, fontFamily: "'Crimson Text', Georgia, serif" }}>{v}</div>
-                    <div style={{ fontSize: 12, color: c, opacity: .8, fontWeight: 600 }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background:'var(--surface-card)', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,.06)', overflow: 'hidden' }}>
-                <Table
-                  cols={['Requester', 'Type', 'Reason', 'From', 'To', 'Status', 'Actions']}
-                  emptyMsg="No permission requests submitted"
-                  rows={permissions.map(p => (
-                    <React.Fragment key={p._id}>
-                      <TD><div style={{ fontWeight: 600, fontSize: 13 }}>{p.requesterName}</div>
-                        <Badge {...roleBadge(p.requesterRole)} text={roleBadge(p.requesterRole).label} size={10} /></TD>
-                      <TD style={{ fontSize: 12 }}>{p.type || '—'}</TD>
-                      <TD><div style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color:'var(--text-2)' }}>
-                        {p.reason || '—'}
-                      </div></TD>
-                      <TD style={{ fontSize: 12, color:'var(--text-faint)' }}>{fmt(p.fromDate)}</TD>
-                      <TD style={{ fontSize: 12, color:'var(--text-faint)' }}>{fmt(p.toDate)}</TD>
-                      <TD><Badge text={p.status} {...statusColor(p.status)} /></TD>
-                      <TD>
-                        {p.status === 'pending'
-                          ? <div style={{ display: 'flex', gap: 6 }}>
-                              <Btn small onClick={() => permissionAction(p, 'approved')} color="#27ae60">Approve</Btn>
-                              <Btn small onClick={() => permissionAction(p, 'rejected')} danger>Reject</Btn>
-                            </div>
-                          : <span style={{ fontSize: 11, color:'var(--text-faint)' }}>{p.rejectionReason ? 'Rejected: ' + p.rejectionReason.substring(0, 30) : p.status}</span>
-                        }
-                      </TD>
-                    </React.Fragment>
-                  ))}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ╔══ SECURITY: SIGN-IN HISTORY ══╗ */}
-          {activeTab === 'security-logins' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ background:'var(--surface-card)', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,.06)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-                  <div>
-                    <h2 style={{ margin: 0, fontSize: 18, color:'var(--navy)' }}>Sign-in history</h2>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color:'var(--text-faint)' }}>
-                      Every authentication attempt, successful or not. Attempts against addresses that
-                      do not exist are recorded too, because a spray across many names is the pattern
-                      worth seeing.
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Select value={secHours} onChange={e => { setLoginPage(1); setSecHours(Number(e.target.value)); }} style={{ width: 170 }}>
-                      <option value={1}>Last hour</option>
-                      <option value={24}>Last 24 hours</option>
-                      <option value={168}>Last 7 days</option>
-                      <option value={720}>Last 30 days</option>
-                    </Select>
-                    <Btn icon="fas fa-rotate" onClick={() => fetchLoginTrail(loginPage)}>Refresh</Btn>
-                  </div>
-                </div>
-
-                {lockPolicy && (
-                  <p style={{ margin: 0, fontSize: 12, color:'var(--text-2)', background: '#f4f6f9',
-                    padding: '8px 12px', borderRadius: 8 }}>
-                    Lockout policy: <strong>{lockPolicy.maxAttempts}</strong> failed attempts within 30
-                    minutes locks an account for <strong>{lockPolicy.lockMinutes}</strong> minutes.
-                  </p>
-                )}
-              </div>
-
-              <div style={{ background:'var(--surface-card)', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,.06)', overflow: 'hidden' }}>
-                {secLoading ? (
-                  <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>
-                ) : (
-                  <Table
-                    cols={['When', 'Account', 'Result', 'Method', 'IP address']}
-                    rows={loginAttempts.map((a) => (
-                      <React.Fragment key={a.id}>
-                        <TD><span style={{ fontSize: 12 }}>{fmt(a.at)} · {fmtTime(a.at)}</span></TD>
-                        <TD>
-                          {a.user
-                            ? <span style={{ fontSize: 13 }}>{a.user.name} <span style={{ color:'var(--text-faint)', fontSize: 11 }}>({a.user.role})</span></span>
-                            : <span style={{ fontSize: 13, color:'var(--text-faint)' }}>{a.identifier || 'unknown'}</span>}
-                        </TD>
-                        <TD>
-                          <Badge
-                            text={a.success ? 'Success' : (a.outcome || 'failed').replace(/_/g, ' ')}
-                            color={a.success ? '#27ae60' : '#e74c3c'}
-                            bg={a.success ? '#e8f5e9' : '#fdecea'}
-                          />
-                        </TD>
-                        <TD><span style={{ fontSize: 12, color:'var(--text-faint)' }}>{a.method || 'password'}</span></TD>
-                        <TD><span style={{ fontSize: 12, fontFamily: 'monospace', color:'var(--text-2)' }}>{a.ip || '—'}</span></TD>
-                      </React.Fragment>
-                    ))}
-                    emptyMsg="No sign-in attempts recorded in this window"
-                  />
-                )}
-
-                {loginPages > 1 && (
-                  <div style={{ padding: 14, display: 'flex', justifyContent: 'space-between',
-                    alignItems: 'center', borderTop:'1px solid var(--border)', fontSize: 12, color:'var(--text-faint)' }}>
-                    <span>{loginTotal} attempt(s)</span>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <Btn small icon="fas fa-chevron-left" color="#888" textColor="var(--on-solid)"
-                        onClick={() => fetchLoginTrail(Math.max(1, loginPage - 1))}>Prev</Btn>
-                      <span>Page {loginPage} of {loginPages}</span>
-                      <Btn small icon="fas fa-chevron-right" color="#888" textColor="var(--on-solid)"
-                        onClick={() => fetchLoginTrail(Math.min(loginPages, loginPage + 1))}>Next</Btn>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ╔══ SECURITY: LOCKED ACCOUNTS ══╗ */}
-          {activeTab === 'security-locked' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ background:'var(--surface-card)', borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,.06)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <h2 style={{ margin: 0, fontSize: 18, color:'var(--navy)' }}>Locked accounts</h2>
-                  <Btn icon="fas fa-rotate" onClick={fetchLocked}>Refresh</Btn>
-                </div>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color:'var(--text-faint)' }}>
-                  Accounts currently blocked by the failed-attempt policy. Unlocking takes effect
-                  immediately, so only do it once you are satisfied the account holder is genuine.
-                </p>
-              </div>
-
-              <div style={{ background:'var(--surface-card)', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,.06)', overflow: 'hidden' }}>
-                {secLoading ? (
-                  <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>
-                ) : (
-                  <Table
-                    cols={['Account', 'Role', 'Locked until', 'Last failed attempt', '']}
-                    rows={lockedAccounts.map((u) => (
-                      <React.Fragment key={u.id}>
-                        <TD>
-                          <span style={{ fontSize: 13 }}>{u.name}</span>
-                          <div style={{ fontSize: 11, color:'var(--text-faint)' }}>{u.email}</div>
-                        </TD>
-                        <TD><Badge text={(u.role || '').replace(/_/g, ' ')} color="#1a3a5c" bg="#e8f0f7" /></TD>
-                        <TD><span style={{ fontSize: 12 }}>{fmt(u.lockedUntil)} {fmtTime(u.lockedUntil)}</span></TD>
-                        <TD><span style={{ fontSize: 12, color:'var(--text-faint)' }}>{u.lastFailedLoginAt ? `${fmt(u.lastFailedLoginAt)} ${fmtTime(u.lastFailedLoginAt)}` : '—'}</span></TD>
-                        <TD><Btn small icon="fas fa-unlock" onClick={() => unlockAccount(u)}>Unlock</Btn></TD>
-                      </React.Fragment>
-                    ))}
-                    emptyMsg="No accounts are currently locked"
-                  />
-                )}
-              </div>
-
-              {topFailingIps.length > 0 && (
-                <div style={{ background:'var(--surface-card)', borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,.06)', overflow: 'hidden' }}>
-                  <div style={{ padding: '18px 20px', borderBottom:'1px solid var(--border)' }}>
-                    <h3 style={{ margin: 0, fontSize: 15, color:'var(--navy)' }}>Most failed attempts by address (24h)</h3>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color:'var(--text-faint)' }}>
-                      Includes attempts that never reached a real account.
-                    </p>
-                  </div>
-                  <Table
-                    cols={['IP address', 'Failed attempts', 'Most recent']}
-                    rows={topFailingIps.map((f, i) => (
-                      <React.Fragment key={`${f.ip}-${i}`}>
-                        <TD><span style={{ fontSize: 12, fontFamily: 'monospace' }}>{f.ip}</span></TD>
-                        <TD><Badge text={String(f.failures)} color="#e74c3c" bg="#fdecea" /></TD>
-                        <TD><span style={{ fontSize: 12, color:'var(--text-faint)' }}>{fmt(f.lastAt)} {fmtTime(f.lastAt)}</span></TD>
-                      </React.Fragment>
-                    ))}
-                    emptyMsg="No failed attempts recorded"
-                  />
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ╔══ PROFILE ══╗ */}
           {activeTab === 'applications' && (

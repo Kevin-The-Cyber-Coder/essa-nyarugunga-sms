@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';import GroupedNav from '../components/GroupedNav';
+import Swal from 'sweetalert2';
+import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
 
-const API_URL = import.meta.env.VITE_API_URL;const getToken = () => localStorage.getItem('portalToken');
+const API_URL = import.meta.env.VITE_API_URL;
+const getToken = () => localStorage.getItem('portalToken');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-RW', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour: '2-digit', minute: '2-digit' }) : '';
 
 const roleBadge = (role) => {
   const map = {
@@ -132,11 +133,8 @@ const ParentDashboard = () => {
   // data
   const [dashboardData, setDashboardData] = useState(null);
   const [grades, setGrades] = useState([]);
-  const [attendance, setAttendance] = useState([]);
   const [feeStatus, setFeeStatus] = useState(null);
-  const [assignments, setAssignments] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [events, setEvents] = useState([]);
   const [disciplineRecords, setDisciplineRecords] = useState([]);
   const [documents, setDocuments] = useState([]);
 
@@ -191,28 +189,22 @@ const ParentDashboard = () => {
       const results = await Promise.allSettled([
         api(`/parent/children/${childId}/dashboard`),
         api(`/parent/children/${childId}/grades`),
-        api(`/parent/children/${childId}/attendance`),
         api(`/parent/children/${childId}/fees`),
-        api(`/parent/children/${childId}/assignments`),
         api(`/parent/children/${childId}/announcements`),
-        api(`/parent/children/${childId}/events`),
         api(`/parent/children/${childId}/discipline`),
         api(`/parent/children/${childId}/documents`),
       ]);
       const val = (r, fb) => (r.status === 'fulfilled' ? r.value : fb);
-      const [d, g, a, f, hw, an, ev, dc, docs] = results;
+      const [d, g, f, an, dc, docs] = results;
 
       setDashboardData(val(d, null));
       setGrades(Array.isArray(val(g, [])) ? val(g, []) : []);
-      setAttendance(Array.isArray(val(a, [])) ? val(a, []) : []);
       setFeeStatus(val(f, null));
-      setAssignments(Array.isArray(val(hw, [])) ? val(hw, []) : []);
       const annList = Array.isArray(val(an, [])) ? val(an, []) : [];
       setAnnouncements(annList);
       annList.forEach((a) => {
         if (a && a._id) api(`/announcements/${a._id}/read`, { method: 'PUT' }).catch(() => {});
       });
-      setEvents(Array.isArray(val(ev, [])) ? val(ev, []) : []);
       setDisciplineRecords(Array.isArray(val(dc, [])) ? val(dc, []) : []);
       setDocuments(Array.isArray(val(docs, [])) ? val(docs, []) : []);
     } catch (e) {
@@ -233,73 +225,6 @@ const ParentDashboard = () => {
     else Swal.fire('Download', `Downloading ${doc?.name || 'document'}`, 'info');
   };
 
-  const handlePayOnline = () => {
-    Swal.fire({
-      title: 'Pay Online',
-      html: `
-        <div style="text-align: left;">
-          <p>Amount Due: <strong>${feeStatus?.balance?.toLocaleString() || 0} RWF</strong></p>
-          <p>Select Payment Method:</p>
-          <select id="paymentMethod" class="swal2-select">
-            <option value="mobile">Mobile Money</option>
-            <option value="card">Credit/Debit Card</option>
-            <option value="bank">Bank Transfer</option>
-          </select>
-          <input type="text" id="amount" class="swal2-input" placeholder="Amount to Pay" value="${feeStatus?.balance || 0}">
-        </div>
-      `,
-      confirmButtonText: 'Pay Now',
-      confirmButtonColor: '#27ae60',
-      showCancelButton: true,
-      preConfirm: () => ({
-        amount: document.getElementById('amount').value,
-        method: document.getElementById('paymentMethod').value
-      })
-    }).then((result) => {
-      if (result.isConfirmed) {
-        Swal.fire('Payment Initiated', `You will be redirected to complete payment of ${parseInt(result.value.amount || 0).toLocaleString()} RWF via ${result.value.method}`, 'success');
-      }
-    });
-  };
-
-  const handleRequestPermission = async () => {
-    if (!selectedChild) return;
-    const { value: formValues } = await Swal.fire({
-      title: `Request Permission for ${childName}`,
-      html: `
-        <div class="admin-form">
-          <div class="form-group"><input type="text" id="type" class="swal2-input" placeholder="Permission Type (e.g., Leave, Event)" required></div>
-          <div class="form-group"><textarea id="reason" class="swal2-textarea" placeholder="Reason" rows="3" required></textarea></div>
-          <div class="form-group"><input type="date" id="fromDate" class="swal2-input" required></div>
-          <div class="form-group"><input type="date" id="toDate" class="swal2-input" required></div>
-        </div>
-      `,
-      confirmButtonText: 'Submit Request',
-      confirmButtonColor: '#3498db',
-      showCancelButton: true,
-      preConfirm: () => {
-        const type = document.getElementById('type').value;
-        const reason = document.getElementById('reason').value;
-        if (!type || !reason) { Swal.showValidationMessage('Please fill required fields'); return false; }
-        return {
-          type, reason,
-          fromDate: document.getElementById('fromDate').value,
-          toDate: document.getElementById('toDate').value,
-          childId: selectedChild._id
-        };
-      }
-    });
-
-    if (formValues) {
-      try {
-        await api('/permissions', { method: 'POST', body: JSON.stringify({ ...formValues, requesterRole: 'parent' }) });
-        Swal.fire('Request Sent!', 'Your permission request has been submitted', 'success');
-      } catch {
-        Swal.fire('Error', 'Failed to submit request', 'error');
-      }
-    }
-  };
-
   // Seven top-level domains; every feature below is reachable as a sub-item.
   const navGroups = [
     {
@@ -311,20 +236,13 @@ const ParentDashboard = () => {
     {
       id: 'g-academic', label: 'Academic', icon: 'fas fa-graduation-cap',
       items: [
-        { id: 'academic', label: 'Academic Performance', icon: 'fas fa-graduation-cap' },
-        { id: 'homework', label: 'Homework', icon: 'fas fa-tasks' },
-      ]
-    },
-    {
-      id: 'g-attendance', label: 'Attendance', icon: 'fas fa-calendar-check',
-      items: [
-        { id: 'attendance', label: 'Attendance', icon: 'fas fa-calendar-check' },
+        { id: 'academic', label: 'Grades', icon: 'fas fa-graduation-cap' },
       ]
     },
     {
       id: 'g-fees', label: 'Fees', icon: 'fas fa-money-bill-wave',
       items: [
-        { id: 'fees', label: 'Fee & Payments', icon: 'fas fa-money-bill-wave' },
+        { id: 'fees', label: 'Fee Detail', icon: 'fas fa-money-bill-wave' },
       ]
     },
     {
@@ -334,15 +252,15 @@ const ParentDashboard = () => {
       ]
     },
     {
-      id: 'g-school', label: 'School Life', icon: 'fas fa-calendar-alt',
+      id: 'g-school', label: 'School Life', icon: 'fas fa-folder-open',
       items: [
-        { id: 'events', label: 'Events', icon: 'fas fa-calendar-alt' },
         { id: 'documents', label: 'Documents', icon: 'fas fa-folder-open' },
       ]
     },
     {
       id: 'g-comms', label: 'Communication', icon: 'fas fa-comments',
-      items: [        { id: 'settings', label: 'Settings', icon: 'fas fa-cog' },
+      items: [
+        { id: 'settings', label: 'Settings', icon: 'fas fa-cog' },
       ]
     },
   ];
@@ -351,21 +269,14 @@ const ParentDashboard = () => {
   const menuItems = navGroups.flatMap(g => g.items);
 
   // ─── safe derived values ────────────────────────────────────────────────
-  const attendanceList = Array.isArray(attendance) ? attendance : [];
   const gradesList = Array.isArray(grades) ? grades : [];
-  const assignmentsList = Array.isArray(assignments) ? assignments : [];
   const announcementsList = Array.isArray(announcements) ? announcements : [];
-  const eventsList = Array.isArray(events) ? events : [];
   const disciplineList = Array.isArray(disciplineRecords) ? disciplineRecords : [];
   const documentsList = Array.isArray(documents) ? documents : [];
 
-  const attendanceRate = attendanceList.length > 0
-    ? Math.round((attendanceList.filter(a => a.status === 'present').length / attendanceList.length) * 100)
-    : 0;
   const avgGrade = gradesList.length > 0
     ? Math.round(gradesList.reduce((s, g) => s + (g.score || 0), 0) / gradesList.length)
     : 0;
-  const pendingHW = assignmentsList.filter(a => a.status === 'pending').length;
   const childName = selectedChild?.name || selectedChild?.fullName || 'Child';
   const sideW = isMobile ? 0 : sidebarOpen ? 260 : 72;
 
@@ -484,8 +395,7 @@ const ParentDashboard = () => {
                   <div style={{ fontSize: 12, opacity: .75 }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <Btn onClick={handleRequestPermission} icon="fas fa-file-alt" color="#ffc107" textColor="#1a3a5c">Request Permission</Btn>
-                  <Btn onClick={() => setActiveTab('fees')} icon="fas fa-credit-card" color="rgba(255,255,255,.15)" textColor="var(--on-solid)">Pay Fees</Btn>
+                  <Btn onClick={() => setActiveTab('fees')} icon="fas fa-credit-card" color="rgba(255,255,255,.15)" textColor="var(--on-solid)">View Fees</Btn>
                 </div>
               </div>
 
@@ -506,17 +416,13 @@ const ParentDashboard = () => {
 
               <div className="stats-g" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14, marginBottom: 20 }}>
                 <StatCard icon="fas fa-chart-line" label="Average Grade" value={`${avgGrade}%`} sub={avgGrade >= 80 ? 'Excellent' : avgGrade >= 70 ? 'Good' : 'Average'} accent="#3498db" bg="#e3f2fd" onClick={() => setActiveTab('academic')} />
-                <StatCard icon="fas fa-calendar-check" label="Attendance Rate" value={`${attendanceRate}%`} sub={attendanceRate >= 90 ? 'Excellent' : attendanceRate >= 75 ? 'Good' : 'Needs Improvement'} accent="#27ae60" bg="#e8f5e9" onClick={() => setActiveTab('attendance')} />
-                <StatCard icon="fas fa-tasks" label="Pending Homework" value={pendingHW} sub="Assignments due" accent="#f39c12" bg="#fff3e0" onClick={() => setActiveTab('homework')} />
                 <StatCard icon="fas fa-money-bill-wave" label="Balance Due" value={`${(feeStatus?.balance || 0).toLocaleString()} RWF`} sub="School fees" accent="#e74c3c" bg="#fdecea" onClick={() => setActiveTab('fees')} />
               </div>
 
               {/* quick actions */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
                 <Btn onClick={() => setActiveTab('academic')} icon="fas fa-chart-line" color="#3498db">View Grades</Btn>
-                <Btn onClick={() => setActiveTab('attendance')} icon="fas fa-calendar-check" color="#f39c12">Attendance</Btn>
-                <Btn onClick={() => setActiveTab('fees')} icon="fas fa-credit-card" color="#27ae60">Pay Fees</Btn>
-                <Btn onClick={() => setActiveTab('homework')} icon="fas fa-tasks" color="#1abc9c">Homework</Btn>
+                <Btn onClick={() => setActiveTab('fees')} icon="fas fa-credit-card" color="#27ae60">View Fees</Btn>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 18 }}>
@@ -536,23 +442,6 @@ const ParentDashboard = () => {
                   })}
                 </div>
 
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}><i className="fas fa-calendar-alt" style={{ marginRight: 7, color: '#3498db' }} />Upcoming Events</h3>
-                  {eventsList.length === 0 ? (
-                    <p style={{ textAlign: 'center', color:'var(--text-faint-2)', fontSize: 13, padding: 20 }}>No upcoming events</p>
-                  ) : eventsList.slice(0, 3).map(event => (
-                    <div key={event._id} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom:'1px solid var(--surface-muted)' }}>
-                      <div style={{ textAlign: 'center', background:'var(--navy)', color:'var(--on-solid)', padding: '8px 10px', borderRadius: 8, minWidth: 50, flexShrink: 0 }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1 }}>{new Date(event.date).getDate()}</div>
-                        <div style={{ fontSize: 9, opacity: .8, letterSpacing: .5 }}>{new Date(event.date).toLocaleString('default', { month: 'short' }).toUpperCase()}</div>
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{event.title}</div>
-                        <div style={{ fontSize: 11, color:'var(--text-faint)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>{event.description}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -561,7 +450,7 @@ const ParentDashboard = () => {
           {activeTab === 'academic' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Academic Performance</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{childName} · {gradesList.length} records</p></div>
+                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Grades</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{childName} · {gradesList.length} records</p></div>
                 <Badge text={`Average ${avgGrade}%`} color="#27ae60" bg="#e8f5e9" size={12} />
               </div>
               <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
@@ -581,40 +470,11 @@ const ParentDashboard = () => {
             </div>
           )}
 
-          {/* ══ ATTENDANCE ══ */}
-          {activeTab === 'attendance' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Attendance Records</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{childName} · {attendanceList.length} days</p></div>
-                <Badge text={`${attendanceRate}% Overall`} color="#27ae60" bg="#e8f5e9" size={12} />
-              </div>
-              <div className="stats-g" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 14, marginBottom: 18 }}>
-                <StatCard icon="fas fa-check-circle" label="Present" value={attendanceList.filter(a => a.status === 'present').length} accent="#27ae60" bg="#e8f5e9" />
-                <StatCard icon="fas fa-times-circle" label="Absent" value={attendanceList.filter(a => a.status === 'absent').length} accent="#e74c3c" bg="#fdecea" />
-                <StatCard icon="fas fa-clock" label="Late" value={attendanceList.filter(a => a.status === 'late').length} accent="#f39c12" bg="#fff3e0" />
-                <StatCard icon="fas fa-calendar" label="Total Days" value={attendanceList.length} accent="#3498db" bg="#e3f2fd" />
-              </div>
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                <Table cols={['Date', 'Status', 'Arrival Time', 'Remarks']} emptyMsg="No attendance records"
-                  rows={attendanceList.map(record => (
-                    <React.Fragment key={record._id}>
-                      <TD style={{ fontSize: 12 }}>{fmt(record.date)}</TD>
-                      <TD><Badge text={record.status} color={record.status === 'present' ? '#27ae60' : record.status === 'absent' ? '#e74c3c' : '#f39c12'} bg={record.status === 'present' ? '#e8f5e9' : record.status === 'absent' ? '#fdecea' : '#fff3e0'} /></TD>
-                      <TD style={{ fontSize: 12 }}>{record.arrivalTime || '—'}</TD>
-                      <TD style={{ fontSize: 12, color:'var(--text-secondary)' }}>{record.remarks || '—'}</TD>
-                    </React.Fragment>
-                  ))}
-                />
-              </div>
-            </div>
-          )}
-
           {/* ══ FEES ══ */}
           {activeTab === 'fees' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Fee & Payments</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{childName}</p></div>
-                <Btn onClick={handlePayOnline} icon="fas fa-credit-card" color="#27ae60">Pay Online</Btn>
+                <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Fee Detail</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{childName}</p></div>
               </div>
               <div className="stats-g" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14, marginBottom: 18 }}>
                 <StatCard icon="fas fa-money-bill" label="Total Fees" value={`${(feeStatus?.total || 0).toLocaleString()} RWF`} accent="#1a3a5c" bg="#e8f0fb" />
@@ -639,81 +499,6 @@ const ParentDashboard = () => {
             </div>
           )}
 
-          {/* ══ HOMEWORK ══ */}
-          {activeTab === 'homework' && (
-            <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Homework & Assignments</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{childName} · {assignmentsList.length} assignments</p></div>
-              {assignmentsList.length === 0 ? (
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 50, textAlign: 'center', color:'var(--text-faint-2)', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <i className="fas fa-tasks" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No assignments yet
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {assignmentsList.map(ass => (
-                    <div key={ass._id} style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)', borderLeft: `4px solid ${ass.status === 'pending' ? '#f39c12' : '#27ae60'}` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
-                        <h3 style={{ margin: 0, fontSize: 15, color:'var(--navy)' }}>{ass.title}</h3>
-                        <Badge text={ass.status} color={ass.status === 'pending' ? '#f39c12' : '#27ae60'} bg={ass.status === 'pending' ? '#fff3e0' : '#e8f5e9'} />
-                      </div>
-                      <p style={{ margin: '0 0 10px', fontSize: 13, color:'var(--text-secondary)', lineHeight: 1.6 }}>{ass.description}</p>
-                      <div style={{ display: 'flex', gap: 16, fontSize: 11, color:'var(--text-faint)', flexWrap: 'wrap' }}>
-                        <span><i className="fas fa-book" style={{ marginRight: 4 }} />{ass.subject}</span>
-                        <span><i className="fas fa-calendar" style={{ marginRight: 4 }} />Due: {fmt(ass.dueDate)}</span>
-                        <span><i className="fas fa-star" style={{ marginRight: 4 }} />{ass.totalPoints} pts</span>
-                      </div>
-                      {ass.fileUrl && (
-                        <div style={{ marginTop: 10 }}>
-                          <Btn small icon="fas fa-download" color="#3498db" onClick={() => handleDownloadDocument({ name: ass.title, url: ass.fileUrl })}>Download Materials</Btn>
-                        </div>
-                      )}
-                      {ass.submitted && (
-                        <div style={{ marginTop: 10, padding: '8px 12px', background:'var(--tint-success)', borderRadius: 8, fontSize: 12, color: '#27ae60' }}>
-                          <strong>Submitted:</strong> {fmt(ass.submittedAt)} | <strong>Score:</strong> {ass.score}%
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ══ EVENTS ══ */}
-          {activeTab === 'events' && (
-            <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>School Events</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{eventsList.length} events</p></div>
-              {eventsList.length === 0 ? (
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 50, textAlign: 'center', color:'var(--text-faint-2)', boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <i className="fas fa-calendar-alt" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No events
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {eventsList.map(event => (
-                    <div key={event._id} style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, display: 'flex', gap: 16, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                      <div style={{ textAlign: 'center', background:'var(--navy)', color:'var(--on-solid)', padding: '12px', borderRadius: 12, minWidth: 70, flexShrink: 0 }}>
-                        <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, fontFamily: 'Georgia, serif' }}>{new Date(event.date).getDate()}</div>
-                        <div style={{ fontSize: 10, opacity: .8, letterSpacing: 1, marginTop: 4 }}>{new Date(event.date).toLocaleString('default', { month: 'short' }).toUpperCase()}</div>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <h3 style={{ margin: 0, fontSize: 15, color:'var(--navy)' }}>{event.title}</h3>
-                        <p style={{ margin: '6px 0', fontSize: 13, color:'var(--text-secondary)', lineHeight: 1.6 }}>{event.description}</p>
-                        <div style={{ display: 'flex', gap: 14, fontSize: 11, color:'var(--text-faint)', flexWrap: 'wrap' }}>
-                          {event.time && <span><i className="fas fa-clock" style={{ marginRight: 4 }} />{event.time}</span>}
-                          {event.location && <span><i className="fas fa-map-marker-alt" style={{ marginRight: 4 }} />{event.location}</span>}
-                        </div>
-                        {event.permissionRequired && (
-                          <div style={{ marginTop: 10 }}>
-                            <Btn small icon="fas fa-file-alt" color="#27ae60" onClick={handleRequestPermission}>Request Permission</Btn>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* ══ DISCIPLINE ══ */}
           {activeTab === 'discipline' && (
             <div>
@@ -734,7 +519,7 @@ const ParentDashboard = () => {
                         </div>
                         <p style={{ margin: '0 0 10px', fontSize: 13, color:'var(--text-secondary)', lineHeight: 1.6 }}>{record.description}</p>
                         <div style={{ display: 'flex', gap: 16, fontSize: 11, color:'var(--text-faint)', flexWrap: 'wrap' }}>
-                          <span><i className="fas fa-calendar" style={{ marginRight: 4 }} />{fmt(record.date)}</span>
+                          <span><i className="fas fa-clock" style={{ marginRight: 4 }} />{fmt(record.date)}</span>
                           <span><i className="fas fa-user" style={{ marginRight: 4 }} />Reported by {record.reportedBy}</span>
                         </div>
                         {record.action && (
@@ -768,7 +553,7 @@ const ParentDashboard = () => {
                   {documentsList.map(doc => (
                     <div key={doc._id} style={{ background:'var(--surface-card)', borderRadius: 14, padding: 16, display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
                       <div style={{ width: 44, height: 44, borderRadius: 12, background:'var(--surface-navy-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <i className={`fas ${doc.type === 'report_card' ? 'fa-file-alt' : doc.type === 'certificate' ? 'fa-certificate' : 'fa-receipt'}`} style={{ fontSize: 18, color:'var(--navy)' }} />
+                        <i className="fas fa-file-alt" style={{ fontSize: 18, color:'var(--navy)' }} />
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color:'var(--navy)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{doc.name}</div>

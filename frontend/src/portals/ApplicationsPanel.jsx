@@ -37,7 +37,6 @@ const RUBRIC = [
 ];
 
 const DOCUMENTS = [
-  { key: 'reportCardUrl',  label: 'Report card' },
   { key: 'birthCertUrl',   label: 'Birth certificate' },
   { key: 'studentPhotoUrl', label: 'Student photo' }
 ];

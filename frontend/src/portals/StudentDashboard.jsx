@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Swal from 'sweetalert2';import GroupedNav from '../components/GroupedNav';
-import StudentQuizzesPanel from './StudentQuizzesPanel';
+import Swal from 'sweetalert2';
+import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
 
@@ -19,11 +19,8 @@ const StudentDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [grades, setGrades] = useState([]);
-  const [attendance, setAttendance] = useState([]);
   const [feeStatus, setFeeStatus] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
-  const [timetable, setTimetable] = useState([]);
-  const [timetableDays, setTimetableDays] = useState([]);
 
   const navigate = useNavigate();
   const getToken = () => localStorage.getItem('portalToken');
@@ -63,21 +60,17 @@ const StudentDashboard = () => {
 
   const fetchAllData = async () => {
     try {
-      const [dashboard, assignmentsData, gradesData, attendanceData, feeData, announcementsData, timetableData] = await Promise.all([
+      const [dashboard, assignmentsData, gradesData, feeData, announcementsData] = await Promise.all([
         apiRequest('/student/dashboard').catch(() => null),
         apiRequest('/student/assignments').catch(() => []),
         apiRequest('/student/grades').catch(() => []),
-        apiRequest('/student/attendance').catch(() => []),
         apiRequest('/student/fees').catch(() => null),
         apiRequest('/student/announcements').catch(() => []),
-        // The timetable route resolves the student's own class server-side.
-        apiRequest('/timetable').catch(() => null)
       ]);
 
       setDashboardData(dashboard);
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
       setGrades(Array.isArray(gradesData) ? gradesData : []);
-      setAttendance(Array.isArray(attendanceData) ? attendanceData : []);
       setFeeStatus(feeData);
       const annList = Array.isArray(announcementsData) ? announcementsData : [];
       setAnnouncements(annList);
@@ -86,8 +79,6 @@ const StudentDashboard = () => {
       annList.forEach((ann) => {
         if (ann?._id) apiRequest(`/announcements/${ann._id}/read`, { method: 'PUT' }).catch(() => {});
       });
-      setTimetable(Array.isArray(timetableData?.timetable) ? timetableData.timetable : []);
-      setTimetableDays(Array.isArray(timetableData?.days) ? timetableData.days : []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -143,51 +134,6 @@ const StudentDashboard = () => {
     }
   };
 
-  // ==================== PERMISSION REQUEST ====================
-  const handleRequestPermission = async () => {
-    const { value: formValues } = await Swal.fire({
-      title: 'Request Permission',
-      html: `
-        <div class="admin-form">
-          <div class="form-group"><input type="text" id="type" class="swal2-input" placeholder="Permission Type (e.g., Leave, Event)" required></div>
-          <div class="form-group"><textarea id="reason" class="swal2-textarea" placeholder="Reason" rows="3" required></textarea></div>
-          <div class="form-group"><input type="date" id="fromDate" class="swal2-input" required></div>
-          <div class="form-group"><input type="date" id="toDate" class="swal2-input" required></div>
-        </div>
-      `,
-      confirmButtonText: 'Submit Request',
-      confirmButtonColor: '#3498db',
-      showCancelButton: true,
-      width: '500px',
-      preConfirm: () => {
-        const type = document.getElementById('type').value;
-        const reason = document.getElementById('reason').value;
-        if (!type || !reason) {
-          Swal.showValidationMessage('Please fill required fields');
-          return false;
-        }
-        return {
-          type, reason,
-          fromDate: document.getElementById('fromDate').value,
-          toDate: document.getElementById('toDate').value
-        };
-      }
-    });
-
-    if (formValues) {
-      try {
-        await apiRequest('/permissions', {
-          method: 'POST',
-          body: JSON.stringify({ ...formValues, requesterRole: 'student' })
-        });
-        Swal.fire('Request Sent!', 'Your permission request has been submitted to Discipline Admin', 'success');
-        fetchAllData();
-      } catch (error) {
-        Swal.fire('Error', 'Failed to submit request', 'error');
-      }
-    }
-  };
-
   const handleLogout = () => {
     localStorage.clear();
     navigate('/portal/login');
@@ -202,7 +148,6 @@ const StudentDashboard = () => {
   const completedAssignments = assignments.filter(a => a.status === 'submitted').length;
   const pendingAssignments = assignments.filter(a => a.status === 'pending').length;
   const avgGrade = grades.length > 0 ? Math.round(grades.reduce((sum, g) => sum + g.score, 0) / grades.length) : 0;
-  const attendanceRate = attendance.length > 0 ? Math.round((attendance.filter(a => a.status === 'present').length / attendance.length) * 100) : 0;
   const feeBalance = feeStatus ? feeStatus.total - feeStatus.paid : 0;
 
   const menuGroups = [
@@ -222,19 +167,11 @@ const StudentDashboard = () => {
       id: 'g-results', label: 'My Results', icon: 'fas fa-chart-simple',
       items: [
         { id: 'grades', label: 'Grades', icon: 'fas fa-chart-simple' },
-        { id: 'quizzes', label: 'Quizzes', icon: 'fas fa-puzzle-piece' },
-      ]
-    },
-    {
-      id: 'g-attendance', label: 'Attendance', icon: 'fas fa-calendar-check',
-      items: [
-        { id: 'attendance', label: 'Attendance', icon: 'fas fa-calendar-check' },
       ]
     },
     {
       id: 'g-school', label: 'School Life', icon: 'fas fa-school',
       items: [
-        { id: 'timetable', label: 'Timetable', icon: 'fas fa-calendar-alt' },
         { id: 'fees', label: 'Fee Status', icon: 'fas fa-money-bill-wave' },
       ]
     },
@@ -321,10 +258,10 @@ const StudentDashboard = () => {
         <div className="welcome-banner">
           <div className="welcome-text">
             <h1>Welcome back, {userName.split(' ')[0]}! 🎓</h1>
-            <p>Track your assignments, grades, attendance, and fee status.</p>
+            <p>Track your assignments, grades, and fee status.</p>
           </div>
           <div className="welcome-date">
-            <i className="fas fa-calendar-alt"></i>
+            <i className="fas fa-clock"></i>
             <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
           </div>
         </div>
@@ -332,7 +269,6 @@ const StudentDashboard = () => {
         {/* Quick Actions */}
         <div className="quick-actions">
           <button onClick={() => setActiveTab('assignments')} className="action-btn primary"><i className="fas fa-tasks"></i> View Assignments</button>
-          <button onClick={handleRequestPermission} className="action-btn warning"><i className="fas fa-file-alt"></i> Request Permission</button>
         </div>
 
         {/* Stats Grid */}
@@ -341,8 +277,6 @@ const StudentDashboard = () => {
             <div className="stat-info"><h3>{totalAssignments}</h3><p>Total Assignments</p><span className="stat-trend">{completedAssignments} completed</span></div></div>
           <div className="stat-card"><div className="stat-icon" style={{ background:'var(--tint-success)' }}><i className="fas fa-chart-line" style={{ color: '#27ae60' }}></i></div>
             <div className="stat-info"><h3>{avgGrade}%</h3><p>Average Grade</p><span className="stat-trend">{avgGrade >= 80 ? 'Excellent' : avgGrade >= 60 ? 'Good' : 'Needs Improvement'}</span></div></div>
-          <div className="stat-card"><div className="stat-icon" style={{ background:'var(--tint-warning)' }}><i className="fas fa-calendar-check" style={{ color: '#f39c12' }}></i></div>
-            <div className="stat-info"><h3>{attendanceRate}%</h3><p>Attendance Rate</p><span className="stat-trend">{attendanceRate >= 80 ? 'Good Standing' : 'Low Attendance'}</span></div></div>
           <div className="stat-card"><div className="stat-icon" style={{ background:'var(--tint-danger)' }}><i className="fas fa-money-bill-wave" style={{ color: '#e74c3c' }}></i></div>
             <div className="stat-info"><h3>{feeBalance.toLocaleString()} RWF</h3><p>Balance Due</p><span className="stat-trend">{feeBalance === 0 ? 'Paid in Full' : 'Payment Due'}</span></div></div>
         </div>
@@ -381,12 +315,6 @@ const StudentDashboard = () => {
                     <div key={grade._id} className="grade-preview"><span>{grade.subject}</span><span className={`grade-value ${grade.score >= 80 ? 'A' : grade.score >= 70 ? 'B' : grade.score >= 60 ? 'C' : 'D'}`}>{grade.grade}</span></div>
                   ))}
                 </div>
-                <div className="data-card">
-                  <h3><i className="fas fa-calendar-check"></i> Recent Attendance</h3>
-                  {attendance.length === 0 ? <p className="no-data">No attendance records</p> : attendance.slice(0, 5).map(att => (
-                    <div key={att._id} className="attendance-preview"><span>{new Date(att.date).toLocaleDateString()}</span><span className={`status ${att.status}`}>{att.status}</span></div>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -400,7 +328,7 @@ const StudentDashboard = () => {
               <div key={assignment._id} className="assignment-card">
                 <div className="assignment-header"><h3>{assignment.title}</h3><span className={`status-badge ${assignment.status}`}>{assignment.status}</span></div>
                 <p>{assignment.description}</p>
-                <div className="assignment-meta"><span><i className="fas fa-book"></i> {assignment.subject}</span><span><i className="fas fa-calendar"></i> Due: {new Date(assignment.dueDate).toLocaleDateString()}</span><span><i className="fas fa-star"></i> {assignment.totalPoints} pts</span></div>
+                <div className="assignment-meta"><span><i className="fas fa-book"></i> {assignment.subject}</span><span><i className="fas fa-clock"></i> Due: {new Date(assignment.dueDate).toLocaleDateString()}</span><span><i className="fas fa-star"></i> {assignment.totalPoints} pts</span></div>
                 {assignment.fileUrl && <button onClick={() => handleDownloadAssignment(assignment)} className="download-btn"><i className="fas fa-download"></i> Download Question Paper</button>}
                 {assignment.status === 'pending' && <button onClick={() => handleSubmitAssignment(assignment)} className="submit-btn"><i className="fas fa-paper-plane"></i> Submit Assignment</button>}
                 {assignment.score && <div className="grade-feedback"><strong>Grade:</strong> {assignment.score}% ({assignment.grade})<br/><strong>Feedback:</strong> {assignment.feedback || 'No feedback yet'}</div>}
@@ -409,10 +337,6 @@ const StudentDashboard = () => {
           </div>
         )}
 
-        {/* Quizzes Tab */}
-        {activeTab === 'quizzes' && (
-          <StudentQuizzesPanel />
-        )}
 
         {/* Grades Tab */}
         {activeTab === 'grades' && (
@@ -440,48 +364,7 @@ const StudentDashboard = () => {
           </div>
         )}
 
-        {/* Attendance Tab */}
-        {activeTab === 'attendance' && (
-          <div className="data-card">
-            <div className="card-header"><h2><i className="fas fa-calendar-check"></i> Attendance Records</h2><div className="stats-badge">{attendanceRate}% Overall</div></div>
-            <div className="attendance-summary"><div className="summary-circle"><div className="circle-percent">{attendanceRate}%</div><p>Present</p></div><div className="summary-details"><div>Present: {attendance.filter(a => a.status === 'present').length}</div><div>Absent: {attendance.filter(a => a.status === 'absent').length}</div><div>Late: {attendance.filter(a => a.status === 'late').length}</div><div>Total Days: {attendance.length}</div></div></div>
-            <div className="table-responsive"><table className="data-table"><thead><tr><th>Date</th><th>Status</th><th>Remarks</th></tr></thead><tbody>
-              {attendance.map(record => (<tr key={record._id}><td>{new Date(record.date).toLocaleDateString()}</td><td className={`status-${record.status}`}>{record.status.toUpperCase()}</td><td>{record.remarks || '-'}</td></tr>))}
-            </tbody></table></div>
-          </div>
-        )}
 
-        {/* Timetable Tab */}
-        {activeTab === 'timetable' && (
-          <div className="data-card">
-            <div className="card-header"><h2><i className="fas fa-calendar-alt"></i> My Timetable</h2>
-              <div className="stats-badge">{dashboardData?.className || 'My Class'}</div>
-            </div>
-            {timetable.length === 0 ? (
-              <p className="no-data">No timetable has been published for your class yet.</p>
-            ) : (
-              <div className="table-responsive">
-                <table className="data-table">
-                  <thead>
-                    <tr><th>Day</th><th>Period</th><th>Subject</th><th>Time</th><th>Teacher</th><th>Room</th></tr>
-                  </thead>
-                  <tbody>
-                    {timetable.map((entry) => (
-                      <tr key={entry._id}>
-                        <td><strong>{entry.dayName}</strong></td>
-                        <td>Period {entry.period}</td>
-                        <td>{entry.subject || '-'}</td>
-                        <td>{entry.startTime && entry.endTime ? `${entry.startTime} - ${entry.endTime}` : '-'}</td>
-                        <td>{entry.teacherName || '-'}</td>
-                        <td>{entry.room || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Fee Status Tab */}
         {activeTab === 'fees' && (
@@ -597,11 +480,6 @@ const StudentDashboard = () => {
         .submit-small { background: #27ae60; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; }
         .grade-preview { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
         .grade-value { font-weight: bold; }
-        .attendance-preview { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
-        .attendance-preview .status { font-weight: bold; }
-        .status.present { color: #27ae60; }
-        .status.absent { color: #e74c3c; }
-        .status.late { color: #f39c12; }
         .assignment-card { padding: 15px; border-radius: 12px; background: #f8f9fa; margin-bottom: 15px; }
         .assignment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         .assignment-header h3 { margin: 0; }
@@ -620,20 +498,12 @@ const StudentDashboard = () => {
         .text-success { color: #27ae60; font-weight: 500; }
         .text-danger { color: #e74c3c; font-weight: 500; }
         .text-warning { color: #f39c12; font-weight: 500; }
-        .attendance-summary { display: flex; align-items: center; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
-        .summary-circle { text-align: center; }
-        .circle-percent { width: 100px; height: 100px; background: #1a3a5c; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; color: white; margin-bottom: 10px; }
-        .summary-details { display: flex; gap: 15px; flex-wrap: wrap; }
-        .summary-details div { background: #f8f9fa; padding: 8px 15px; border-radius: 8px; }
         .fee-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 25px; }
         .fee-card { background: #f8f9fa; padding: 15px; border-radius: 12px; text-align: center; }
         .fee-card .amount { font-size: 1.3rem; font-weight: bold; margin-top: 10px; }
         .fee-card .amount.success { color: #27ae60; }
         .fee-card .amount.due { color: #e74c3c; }
         .pay-btn { background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin-top: 15px; width: 100%; }
-        .status-present { color: #27ae60; font-weight: bold; }
-        .status-absent { color: #e74c3c; font-weight: bold; }
-        .status-late { color: #f39c12; font-weight: bold; }
         .profile-card { background: white; border-radius: 20px; overflow: hidden; max-width: 600px; margin: 0 auto; }
         .profile-header { background: linear-gradient(135deg, #1a3a5c, #2c5f8a); color: white; padding: 40px; text-align: center; }
         .profile-avatar { width: 100px; height: 100px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; }
@@ -645,7 +515,7 @@ const StudentDashboard = () => {
         .no-data { text-align: center; padding: 40px; color: #999; }
         .stats-badge { background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; }
         .stats-badge.success { background: #e8f5e9; }
-        @media (max-width: 768px) { .mobile-menu-btn { display: block; } .welcome-text h1 { font-size: 1.2rem; } .stats-grid { grid-template-columns: 1fr; } .two-columns { grid-template-columns: 1fr; } .quick-actions { flex-direction: column; } .attendance-summary { flex-direction: column; align-items: flex-start; } }
+        @media (max-width: 768px) { .mobile-menu-btn { display: block; } .welcome-text h1 { font-size: 1.2rem; } .stats-grid { grid-template-columns: 1fr; } .two-columns { grid-template-columns: 1fr; } .quick-actions { flex-direction: column; } }
       `}</style>
     </div>
   );

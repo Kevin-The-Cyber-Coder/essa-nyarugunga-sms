@@ -1,6 +1,6 @@
 // Opens a server-rendered printable document in a new tab.
 //
-// The obvious way to do this is window.open('/api/report-cards/x/print'), but a
+// The obvious way to do this is window.open('/api/admissions-admin/applications/x/print'), but a
 // plain navigation sends no Authorization header, so the request 401s. The usual
 // workaround is to append ?token=<jwt> to the URL, which puts a live session
 // token into browser history, server access logs and any Referer header the page
@@ -13,7 +13,7 @@
 const getToken = () => localStorage.getItem('portalToken');
 
 /**
- * @param {string} path   API path, e.g. /report-cards/:id/print?term=..&year=..
+ * @param {string} path   API path, e.g. /admissions-admin/applications/:id/print
  * @param {string} apiUrl value of VITE_API_URL
  * @param {string} title  document title for the new tab
  * @returns {Promise<boolean>} whether the document was rendered

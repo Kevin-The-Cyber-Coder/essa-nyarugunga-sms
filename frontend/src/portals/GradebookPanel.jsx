@@ -206,7 +206,7 @@ export const GradebookPanel = () => {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Gradebook</h2>
           <p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>
-            Weighted term averages, identical to the figures on report cards
+            Weighted term averages calculated from entered exam marks
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -257,7 +257,7 @@ export const GradebookPanel = () => {
         <div style={{ background:'var(--tint-amber)', border:'1px solid var(--tint-amber-line)', borderLeft: '4px solid #ffc107', borderRadius: 10, padding: '11px 14px', fontSize: 12, color:'var(--tint-amber-text)', marginBottom: 14 }}>
           <strong>No assessment weights set for this term.</strong> Averages below are a plain mean of percentages.
           Ask Academic Admin to set a weight on at least one assessment, otherwise every assessment counts the same
-          regardless of whether it was a 10-mark quiz or the final paper.
+          regardless of whether it was a short test or the final paper.
         </div>
       )}
 

@@ -120,8 +120,6 @@ const AccountsAdminDashboard = () => {
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [invoices, setInvoices] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
-  const [financialSummary, setFinancialSummary] = useState(null);
   const [invoiceTerm, setInvoiceTerm] = useState('Term 1');
   const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
 
@@ -174,7 +172,7 @@ const AccountsAdminDashboard = () => {
     fetchBudget(), fetchIncome(), fetchExpenses(), fetchFees(),
     fetchPayments(), fetchClasses(), fetchStudents(),
     fetchAnnouncements(),
-    fetchInvoices(), fetchAnalytics(), fetchFinancialSummary(),
+    fetchInvoices(),
   ]).finally(() => setLoading(false));
 
   // ─── fetchers ─────────────────────────────────────────────────
@@ -192,12 +190,6 @@ const AccountsAdminDashboard = () => {
     api(`/accounts/invoices?term=${encodeURIComponent(invoiceTerm)}&year=${invoiceYear}`)
       .then(d => setInvoices(Array.isArray(d) ? d : []))
       .catch(() => setInvoices([]));
-  };
-  const fetchAnalytics = () => {
-    api(`/accounts/fee-analytics?year=${invoiceYear}`).then(setAnalytics).catch(() => setAnalytics(null));
-  };
-  const fetchFinancialSummary = () => {
-    api('/accounts/financial-summary').then(d => setFinancialSummary(d || null)).catch(() => setFinancialSummary(null));
   };
 
   // ─── financial actions ───────────────────────────────────────────
@@ -275,7 +267,7 @@ const AccountsAdminDashboard = () => {
         html: `${res.created || 0} new invoice(s) created.<br/>${res.updated || 0} existing invoice(s) refreshed from current fee structures.`,
         icon: 'success'
       });
-      fetchInvoices(); fetchAnalytics();
+      fetchInvoices();
     } catch (e) { Swal.fire('Error', e.message || 'Failed to generate', 'error'); }
     finally { setSaving(false); }
   };
@@ -283,7 +275,7 @@ const AccountsAdminDashboard = () => {
   const updateInvoiceStatus = async (invoice, status) => {
     try {
       await api(`/accounts/invoices/${invoice._id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
-      fetchInvoices(); fetchAnalytics();
+      fetchInvoices();
     } catch (e) { Swal.fire('Error', e.message || 'Failed to update status', 'error'); }
   };
 
@@ -383,7 +375,7 @@ const AccountsAdminDashboard = () => {
     {
       id: 'g-invoices', label: 'Invoices', icon: 'fas fa-file-invoice-dollar',
       items: [
-        { id: 'invoices', label: 'Invoices & Analytics', icon: 'fas fa-file-invoice-dollar' },
+        { id: 'invoices', label: 'Invoices', icon: 'fas fa-file-invoice-dollar' },
       ]
     },
     {
@@ -670,12 +662,12 @@ const AccountsAdminDashboard = () => {
             </div>
           )}
 
-          {/* ══ INVOICES & ANALYTICS ══ */}
+          {/* ══ INVOICES & FEES ══ */}
           {activeTab === 'invoices' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Invoices & Fee Analytics</h2>
+                  <h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Invoices & Fees</h2>
                   <p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>
                     {visibleInvoices.length} invoice(s) · collected {fmtAmt(invoiceTotals.paid)} of {fmtAmt(invoiceTotals.total)}
                   </p>
@@ -687,110 +679,10 @@ const AccountsAdminDashboard = () => {
                   <Sel value={invoiceYear} onChange={e => setInvoiceYear(Number(e.target.value))} style={{ width: 110 }}>
                     {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => <option key={y} value={y}>{y}</option>)}
                   </Sel>
-                  <Btn small onClick={() => { fetchInvoices(); fetchAnalytics(); }} icon="fas fa-sync" color="#1a3a5c">Refresh</Btn>
+                  <Btn small onClick={fetchInvoices} icon="fas fa-sync" color="#1a3a5c">Refresh</Btn>
                   <Btn small onClick={generateInvoices} disabled={saving} icon="fas fa-file-invoice" color="#27ae60">Generate Invoices</Btn>
                 </div>
               </div>
-
-              {analytics?.summary && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 14, marginBottom: 20 }}>
-                  {[
-                    { label: 'Expected', value: fmtAmt(analytics.summary.totalExpected), accent:'var(--navy)', bg:'var(--surface-navy-tint)' },
-                    { label: 'Collected', value: fmtAmt(analytics.summary.totalCollected), accent: '#27ae60', bg:'var(--tint-success)' },
-                    { label: 'Outstanding', value: fmtAmt(analytics.summary.balance), accent: '#e74c3c', bg:'var(--tint-danger)' },
-                    { label: 'Collection Rate', value: `${analytics.summary.collectionRate}%`, accent: '#3498db', bg:'var(--tint-primary)' },
-                    { label: 'Overdue', value: analytics.summary.overdue || 0, accent: '#e74c3c', bg:'var(--tint-danger)' },
-                    { label: 'Paid Invoices', value: analytics.summary.paid || 0, accent: '#27ae60', bg:'var(--tint-success)' },
-                  ].map((s, i) => (
-                    <div key={i} style={{ background:'var(--surface-card)', borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 10px rgba(0,0,0,.05)', border:'1px solid var(--surface-page)' }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <i className="fas fa-coins" style={{ fontSize: 16, color: s.accent }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color:'var(--navy)', lineHeight: 1, fontFamily: 'Georgia, serif' }}>{s.value}</div>
-                        <div style={{ fontSize: 11, color:'var(--text-faint)', marginTop: 3 }}>{s.label}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {financialSummary && (
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <h3 style={{ margin: '0 0 12px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}>
-                    <i className="fas fa-scale-balanced" style={{ marginRight: 7, color: '#3498db' }} />Financial Summary
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, fontSize: 13 }}>
-                    {[
-                      ['Total Income', fmtAmt(financialSummary.totalIncome)],
-                      ['Total Expenses', fmtAmt(financialSummary.totalExpenses)],
-                      ['Net Balance', fmtAmt(financialSummary.netBalance)],
-                      ['Completed Payments', financialSummary.completedPayments ?? '—'],
-                    ].map(([k, v]) => (
-                      <div key={k}>
-                        <div style={{ fontSize: 11, color:'var(--text-faint)' }}>{k}</div>
-                        <div style={{ fontWeight: 700, color:'var(--navy)' }}>{v}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {analytics?.monthlyTrend?.length > 0 && (
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}>
-                    <i className="fas fa-chart-bar" style={{ marginRight: 7, color: '#27ae60' }} />Collection Trend (6 months)
-                  </h3>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 140 }}>
-                    {(() => {
-                      const max = Math.max(1, ...analytics.monthlyTrend.map(m => m.amount));
-                      return analytics.monthlyTrend.map(m => (
-                        <div key={m.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                          <div style={{ fontSize: 10, color:'var(--text-faint)' }}>{(m.amount / 1000).toFixed(0)}k</div>
-                          <div title={fmtAmt(m.amount)} style={{ width: '100%', maxWidth: 54, height: `${Math.max(4, Math.round((m.amount / max) * 100))}%`, background: 'linear-gradient(180deg,#27ae60,#1e8449)', borderRadius: '6px 6px 0 0' }} />
-                          <div style={{ fontSize: 11, color:'var(--text-secondary)' }}>{m.label}</div>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              )}
-
-              <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                <h3 style={{ margin: '0 0 14px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}>
-                  <i className="fas fa-chalkboard" style={{ marginRight: 7, color: '#9b59b6' }} />Collection by Class
-                </h3>
-                <Table cols={['Class', 'Invoices', 'Expected', 'Collected', 'Balance', 'Rate']} emptyMsg="No invoice data for this year"
-                  rows={(analytics?.byClass || []).map(c => (
-                    <React.Fragment key={c.className}>
-                      <TD><div style={{ fontWeight: 600, fontSize: 13 }}>{c.className}</div></TD>
-                      <TD style={{ fontSize: 12 }}>{c.students}</TD>
-                      <TD style={{ fontSize: 12 }}>{fmtAmt(c.expected)}</TD>
-                      <TD><span style={{ fontWeight: 700, color: '#27ae60' }}>{fmtAmt(c.collected)}</span></TD>
-                      <TD><span style={{ fontWeight: 700, color: c.balance > 0 ? '#e74c3c' : '#27ae60' }}>{fmtAmt(c.balance)}</span></TD>
-                      <TD><Badge text={`${c.rate}%`} color={c.rate >= 70 ? '#27ae60' : '#e74c3c'} bg={c.rate >= 70 ? '#e8f5e9' : '#fdecea'} /></TD>
-                    </React.Fragment>
-                  ))}
-                />
-              </div>
-
-              {analytics?.arrears?.length > 0 && (
-                <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, marginBottom: 20, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <h3 style={{ margin: '0 0 14px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}>
-                    <i className="fas fa-exclamation-triangle" style={{ marginRight: 7, color: '#e74c3c' }} />Top Debtors
-                  </h3>
-                  <Table cols={['Student', 'Class', 'Term', 'Balance']} emptyMsg="No outstanding balances"
-                    rows={analytics.arrears.map(a => (
-                      <React.Fragment key={a.invoice._id}>
-                        <TD><div style={{ fontWeight: 600, fontSize: 13 }}>{a.student?.fullName || '—'}</div></TD>
-                        <TD style={{ fontSize: 12 }}>{a.student?.classId ? `${a.student.classId.grade || ''} ${a.student.classId.className || ''}` : '—'}</TD>
-                        <TD style={{ fontSize: 12 }}>{a.invoice.term} {a.invoice.year}</TD>
-                        <TD><span style={{ fontWeight: 700, color: '#e74c3c' }}>{fmtAmt(a.balance)}</span></TD>
-                      </React.Fragment>
-                    ))}
-                  />
-                </div>
-              )}
 
               <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>

@@ -2,11 +2,7 @@ import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { GradebookPanel } from './GradebookPanel';
-import { AttendancePanel } from './AttendancePanel';
-import { QuizBuilderPanel } from './QuizBuilderPanel';
-import { ProgressPanel } from './ProgressPanel';
 import { ClassAnnouncementsPanel } from './ClassAnnouncementsPanel';
-import { PermissionRequestsPanel } from './PermissionRequestsPanel';
 import GroupedNav from '../components/GroupedNav';
 import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
@@ -150,7 +146,6 @@ const assignmentTypes = [
   { value: 'homework', label: '📚 Homework' },
   { value: 'classwork', label: '📝 Classwork' },
   { value: 'project', label: '🎯 Project' },
-  { value: 'quiz', label: '📋 Quiz' }
 ];
 
 // ═══════════════════════════════════════════════════════════════════
@@ -170,14 +165,11 @@ const TeacherDashboard = () => {
   const [students, setStudents] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
-  const [lessonPlans, setLessonPlans] = useState([]);
   const [resourceClassId, setResourceClassId] = useState('');
 
   // modals
   const [assignmentModal, setAssignmentModal] = useState(false);
-  const [attendanceModal, setAttendanceModal] = useState(false);
   const [disciplineModal, setDisciplineModal] = useState(false);
-  const [lessonModal, setLessonModal] = useState(false);
   const [gradeModal, setGradeModal] = useState(false);
   const [gradeAssignment, setGradeAssignment] = useState(null);
   const [gradeScores, setGradeScores] = useState({});
@@ -188,17 +180,12 @@ const TeacherDashboard = () => {
   const [assignmentForm, setAssignmentForm] = useState({
     title: '', description: '', classId: '', type: 'homework', dueDate: '', totalPoints: 100
   });
-  const [attendanceForm, setAttendanceForm] = useState({ date: new Date().toISOString().split('T')[0], classId: '', records: [] });
   const [disciplineForm, setDisciplineForm] = useState({
     studentId: '', category: '', description: '', incidentDate: new Date().toISOString().split('T')[0]
-  });
-  const [lessonForm, setLessonForm] = useState({
-    title: '', topic: '', objectives: '', materials: '', shareWithStudents: true
   });
 
   // file states
   const [assignmentFile, setAssignmentFile] = useState(null);
-  const [lessonFile, setLessonFile] = useState(null);
 
   const userName = localStorage.getItem('userName') || 'Teacher';
 
@@ -227,7 +214,6 @@ const TeacherDashboard = () => {
       });
     })
     .catch(() => setAnnouncements([])), [api]);
-  const fetchLessonPlans = useCallback(() => api('/teacher/lesson-plans').then(d => setLessonPlans(Array.isArray(d) ? d : [])).catch(() => setLessonPlans([])), [api]);
 
   // auth + load
   useEffect(() => {
@@ -238,9 +224,9 @@ const TeacherDashboard = () => {
       return;
     }
     Promise.all([
-      fetchClasses(), fetchStudents(), fetchAssignments(), fetchAnnouncements(), fetchLessonPlans()
+      fetchClasses(), fetchStudents(), fetchAssignments(), fetchAnnouncements()
     ]).finally(() => setLoading(false));
-  }, [navigate, fetchClasses, fetchStudents, fetchAssignments, fetchAnnouncements, fetchLessonPlans]);
+  }, [navigate, fetchClasses, fetchStudents, fetchAssignments, fetchAnnouncements]);
 
   // Create Assignment with File Upload
   const createAssignment = async () => {
@@ -340,44 +326,6 @@ const TeacherDashboard = () => {
     }
   };
 
-  // Upload Lesson Plan with File
-  const uploadLessonPlan = async () => {
-    if (!lessonForm.title || !lessonForm.topic) {
-      Swal.fire('Missing Fields', 'Title and topic required', 'warning');
-      return;
-    }
-    setSaving(true);
-    try {
-      const formData = new FormData();
-      formData.append('title', lessonForm.title);
-      formData.append('topic', lessonForm.topic);
-      formData.append('objectives', lessonForm.objectives);
-      formData.append('materials', lessonForm.materials);
-      formData.append('shareWithStudents', lessonForm.shareWithStudents);
-      if (lessonFile) {
-        formData.append('file', lessonFile);
-      }
-
-      const token = getToken();
-      const response = await fetch(`${API_URL}/api/teacher/lesson-plans`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-
-      if (!response.ok) throw await response.json().catch(() => ({}));
-
-      Swal.fire('✅ Lesson Plan Uploaded!', 'Materials shared with students', 'success');
-      setLessonModal(false);
-      setLessonForm({ title: '', topic: '', objectives: '', materials: '', shareWithStudents: true });
-      setLessonFile(null);
-      fetchLessonPlans();
-    } catch (e) {
-      Swal.fire('Error', e.message || 'Failed to upload', 'error');
-    }
-    finally { setSaving(false); }
-  };
-
   const reportIncident = async () => {
     if (!disciplineForm.studentId || !disciplineForm.category || !disciplineForm.description) {
       Swal.fire('Missing Fields', 'Please fill all required fields', 'warning');
@@ -406,35 +354,6 @@ const TeacherDashboard = () => {
     finally { setSaving(false); }
   };
 
-  const openAttendanceModal = (cls) => {
-    const classStudents = students.filter(s => s.classId?._id === cls._id);
-    const records = classStudents.map(s => ({ studentId: s._id, studentName: s.fullName, status: 'present' }));
-    setAttendanceForm({ date: new Date().toISOString().split('T')[0], classId: cls._id, records });
-    setAttendanceModal(true);
-  };
-
-  const updateAttendanceStatus = (studentId, status) => {
-    setAttendanceForm(prev => ({
-      ...prev,
-      records: prev.records.map(r => r.studentId === studentId ? { ...r, status } : r)
-    }));
-  };
-
-  const saveAttendance = async () => {
-    if (!attendanceForm.classId || !attendanceForm.records.length) {
-      Swal.fire('Missing Fields', 'Please mark attendance', 'warning');
-      return;
-    }
-    setSaving(true);
-    try {
-      await api('/teacher/attendance', { method: 'POST', body: JSON.stringify(attendanceForm) });
-      Swal.fire('✅ Attendance Saved!', 'Attendance recorded successfully', 'success');
-      setAttendanceModal(false);
-    } catch (e) {
-      Swal.fire('Error', e.message || 'Failed to save', 'error');
-    }
-    finally { setSaving(false); }
-  };
 
   const pendingAssignments = assignments.filter(a => new Date(a.dueDate) > new Date()).length;
   const totalStudents = students.length;
@@ -459,16 +378,12 @@ const TeacherDashboard = () => {
       id: 'g-assessment', label: 'Assessment', icon: 'fas fa-clipboard-check',
       items: [
         { id: 'gradebook', label: 'Gradebook', icon: 'fas fa-table' },
-        { id: 'quizzes', label: 'Quiz Builder', icon: 'fas fa-puzzle-piece' },
-        { id: 'progress', label: 'Progress', icon: 'fas fa-chart-line' },
         { id: 'assignments', label: 'Assignments', icon: 'fas fa-tasks', badge: pendingAssignments },
-        { id: 'attendance', label: 'Attendance', icon: 'fas fa-calendar-check' },
       ]
     },
     {
       id: 'g-resources', label: 'Resources', icon: 'fas fa-folder-open',
       items: [
-        { id: 'materials', label: 'Study Materials', icon: 'fas fa-book' },
         { id: 'class-resources', label: 'Class Resources', icon: 'fas fa-folder-open' },
       ]
     },
@@ -487,7 +402,6 @@ const TeacherDashboard = () => {
     {
       id: 'g-account', label: 'Account', icon: 'fas fa-user-shield',
       items: [
-        { id: 'permissions', label: 'Permission Requests', icon: 'fas fa-file-signature' },
         { id: 'profile', label: 'Profile', icon: 'fas fa-user-shield' },
       ]
     },
@@ -589,7 +503,6 @@ const TeacherDashboard = () => {
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <Btn onClick={() => setAssignmentModal(true)} icon="fas fa-plus" color="#ffc107" textColor="#1a3a5c">Create Assignment</Btn>
-                  <Btn onClick={() => setLessonModal(true)} icon="fas fa-upload" color="rgba(255,255,255,.15)" textColor="var(--on-solid)">Upload Lesson</Btn>
                 </div>
               </div>
 
@@ -598,14 +511,12 @@ const TeacherDashboard = () => {
                 <StatCard icon="fas fa-school" label="My Classes" value={classes.length} sub="Assigned classes" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('classes')} />
                 <StatCard icon="fas fa-user-graduate" label="Students" value={totalStudents} sub="Under my care" accent="#1abc9c" bg="#e0f7fa" onClick={() => setActiveTab('students')} />
                 <StatCard icon="fas fa-tasks" label="Pending Assignments" value={pendingAssignments} sub="Need grading" accent="#f39c12" bg="#fff3e0" onClick={() => setActiveTab('assignments')} />
-                <StatCard icon="fas fa-book" label="Lesson Plans" value={lessonPlans.length} sub="Uploaded" accent="#3498db" bg="#e3f2fd" onClick={() => setActiveTab('materials')} />
               </div>
 
               {/* Quick Actions */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
                 <Btn onClick={() => setAssignmentModal(true)} icon="fas fa-tasks" color="#9b59b6">Create Assignment</Btn>
                 <Btn onClick={() => setDisciplineModal(true)} icon="fas fa-exclamation-triangle" color="#e74c3c">Report Issue</Btn>
-                <Btn onClick={() => setLessonModal(true)} icon="fas fa-book" color="#3498db">Upload Lesson</Btn>
               </div>
 
               {/* Recent Announcements */}
@@ -644,7 +555,6 @@ const TeacherDashboard = () => {
                         <Badge text={`${classStudents.length} students`} color="#3498db" bg="#e3f2fd" />
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                        <Btn small onClick={() => openAttendanceModal(cls)} icon="fas fa-calendar-check" color="#f39c12">Take Attendance</Btn>
                         <Btn small onClick={() => { setAssignmentForm(prev => ({ ...prev, classId: cls._id })); setAssignmentModal(true); }} icon="fas fa-tasks" color="#9b59b6">Create Assignment</Btn>
                       </div>
                     </div>
@@ -654,16 +564,6 @@ const TeacherDashboard = () => {
               </div>
             </div>
           )}
-
-          {activeTab === 'gradebook' && <GradebookPanel />}
-
-          {activeTab === 'quizzes' && <QuizBuilderPanel />}
-
-          {activeTab === 'progress' && <ProgressPanel />}
-
-          {activeTab === 'permissions' && <PermissionRequestsPanel />}
-
-          {activeTab === 'attendance' && <AttendancePanel />}
 
           {/* ══ ASSIGNMENTS ══ */}
           {activeTab === 'assignments' && (
@@ -708,7 +608,7 @@ const TeacherDashboard = () => {
           {/* ══ STUDENTS ══ */}
           {activeTab === 'students' && (
             <div>
-              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>My Students</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{students.length} students enrolled</p></div>
+              <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>My Students</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{students.length} students</p></div>
               <div style={{ background: 'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)', overflowX: 'auto' }}>
                 <Table
                   cols={['Student', 'Class', 'Parent', 'Contact', 'Actions']}
@@ -760,31 +660,6 @@ const TeacherDashboard = () => {
                 </Field>
                 <Field label="Incident Date"><Inp type="date" value={disciplineForm.incidentDate} onChange={e => setDisciplineForm(p => ({ ...p, incidentDate: e.target.value }))} /></Field>
                 <Btn onClick={reportIncident} icon="fas fa-paper-plane" color="#e74c3c" disabled={saving} style={{ width: '100%', justifyContent: 'center' }}>{saving ? 'Reporting…' : 'Report Incident'}</Btn>
-              </div>
-            </div>
-          )}
-
-          {/* ══ STUDY MATERIALS ══ */}
-          {activeTab === 'materials' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                <div><h2 style={{ margin: 0, fontSize: 19, color: 'var(--navy)', fontFamily: 'Georgia, serif' }}>Study Materials</h2><p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{lessonPlans.length} resources shared</p></div>
-                <Btn onClick={() => setLessonModal(true)} icon="fas fa-plus" color="#3498db">Upload Lesson Plan</Btn>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {lessonPlans.length === 0 && <div style={{ textAlign: 'center', padding: 50, background: 'var(--surface-card)', borderRadius: 14, color: 'var(--text-faint-2)' }}><i className="fas fa-book" style={{ fontSize: 36, display: 'block', marginBottom: 10, opacity: .3 }} />No study materials uploaded yet</div>}
-                {lessonPlans.map(lp => (
-                  <div key={lp._id} style={{ background: 'var(--surface-card)', borderRadius: 12, padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,.04)', transition: 'all 0.2s' }}
-                    onMouseEnter={e => e.currentTarget.style.transform = 'translateX(2px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform = ''}>
-                    <h3 style={{ margin: 0, fontSize: 14, color: 'var(--navy)' }}>{lp.title}</h3>
-                    <p style={{ margin: '5px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>{lp.topic}</p>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                      <Badge text={lp.shareWithStudents ? 'Shared with Students' : 'Draft'} color={lp.shareWithStudents ? '#27ae60' : '#f39c12'} bg={lp.shareWithStudents ? '#e8f5e9' : '#fff3e0'} />
-                      {lp.fileUrl && <Btn small icon="fas fa-download" color="#3498db" onClick={() => window.open(lp.fileUrl, '_blank', 'noopener')}>Download</Btn>}
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
@@ -966,60 +841,6 @@ const TeacherDashboard = () => {
         </div>
       </Modal>
 
-      {/* Take Attendance Modal */}
-      <Modal open={attendanceModal} onClose={() => setAttendanceModal(false)} title="Take Attendance" width={600}>
-        <Field label="Date"><Inp type="date" value={attendanceForm.date} onChange={e => setAttendanceForm(p => ({ ...p, date: e.target.value }))} /></Field>
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-          {attendanceForm.records.map(record => (
-            <div key={record.studentId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 13 }}>{record.studentName}</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {['present', 'absent', 'late', 'excused'].map(status => (
-                  <button
-                    key={status}
-                    onClick={() => updateAttendanceStatus(record.studentId, status)}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 20,
-                      border: '1px solid var(--border)',
-                      background: record.status === status ? (status === 'present' ? '#27ae60' : status === 'absent' ? '#e74c3c' : status === 'late' ? '#f39c12' : '#3498db') : 'var(--surface-card)',
-                      color: record.status === status ? '#fff' : '#666',
-                      cursor: 'pointer',
-                      fontSize: 11,
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={e => { if (record.status !== status) e.currentTarget.style.background = '#f0f0f0'; }}
-                    onMouseLeave={e => { if (record.status !== status) e.currentTarget.style.background = 'var(--surface-card)'; }}
-                  >
-                    {status.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
-          <Btn onClick={() => setAttendanceModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-          <Btn onClick={saveAttendance} icon="fas fa-save" color="#27ae60" disabled={saving}>{saving ? 'Saving…' : 'Save Attendance'}</Btn>
-        </div>
-      </Modal>
-
-      {/* Upload Lesson Plan Modal */}
-      <Modal open={lessonModal} onClose={() => setLessonModal(false)} title="Upload Lesson Plan / Study Materials" width={540}>
-        <Field label="Lesson Title" required><Inp value={lessonForm.title} placeholder="Lesson title" onChange={e => setLessonForm(p => ({ ...p, title: e.target.value }))} /></Field>
-        <Field label="Topic/Chapter" required><Inp value={lessonForm.topic} placeholder="Topic or chapter name" onChange={e => setLessonForm(p => ({ ...p, topic: e.target.value }))} /></Field>
-        <Field label="Learning Objectives"><Txt value={lessonForm.objectives} rows={2} placeholder="What students will learn..." onChange={e => setLessonForm(p => ({ ...p, objectives: e.target.value }))} /></Field>
-        <Field label="Materials Needed"><Inp value={lessonForm.materials} placeholder="Required materials/resources" onChange={e => setLessonForm(p => ({ ...p, materials: e.target.value }))} /></Field>
-        <Field label="File Attachment (PDF/DOC/PPT)"><input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.png" onChange={e => setLessonFile(e.target.files[0] || null)} style={{ fontSize: 13, padding: '6px 0' }} /></Field>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-          <input type="checkbox" checked={lessonForm.shareWithStudents} onChange={e => setLessonForm(p => ({ ...p, shareWithStudents: e.target.checked }))} style={{ width: 18, height: 18 }} />
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Share with students immediately</span>
-        </div>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-          <Btn onClick={() => setLessonModal(false)} color="#f0f0f0" textColor="#666">Cancel</Btn>
-          <Btn onClick={uploadLessonPlan} icon="fas fa-upload" color="#3498db" disabled={saving}>{saving ? 'Uploading…' : 'Upload Lesson'}</Btn>
-        </div>
-      </Modal>
     </div>
   );
 };

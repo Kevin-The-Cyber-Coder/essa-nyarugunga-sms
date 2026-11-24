@@ -1,11 +1,7 @@
   import React, { useState, useEffect, useRef, useCallback } from 'react';
   import { useNavigate } from 'react-router-dom';
   import Swal from 'sweetalert2';
-  import {
-    TimetablePanel, SubjectAllocationPanel, ExamsPanel, ReportCardsPanel,
-    PromotionPanel, AnalyticsPanel, LessonReviewPanel, SdmsPanel
-  } from './AcademicPanels';
-  import { CalendarPanel } from './CalendarPanel';
+  import { SubjectAllocationPanel, ExamsPanel } from './AcademicPanels';
   import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
   import GroupedNav from '../components/GroupedNav';
   import ThemeToggle from '../components/ThemeToggle';
@@ -138,8 +134,6 @@
     const [classes, setClasses] = useState([]);
     const [students, setStudents] = useState([]);
     const [announcements, setAnnouncements] = useState([]);
-    const [studentPerformance, setStudentPerformance] = useState([]);
-    const [classPerformance, setClassPerformance] = useState([]);
     // modals
     const [teacherModal, setTeacherModal] = useState(false);
     const [classModal, setClassModal] = useState(false);
@@ -175,17 +169,13 @@
 
     const loadAll = () => Promise.all([
       fetchTeachers(), fetchClasses(), fetchStudents(),
-      fetchAnnouncements(), fetchPerformance(),
+      fetchAnnouncements(),
     ]).finally(() => setLoading(false));
 
     const fetchTeachers = () => api('/academic-admin/teachers-list').then(d => setTeachers(Array.isArray(d) ? d : [])).catch(() => {});
     const fetchClasses = () => api('/academic-admin/classes').then(d => setClasses(Array.isArray(d) ? d : [])).catch(() => {});
     const fetchStudents = () => api('/academic-admin/students').then(d => setStudents(Array.isArray(d) ? d : [])).catch(() => {});
     const fetchAnnouncements = () => api('/announcements').then(d => setAnnouncements(Array.isArray(d) ? d : [])).catch(() => {});
-    const fetchPerformance = () => {
-      api('/academic-admin/students-performance').then(d => setStudentPerformance(Array.isArray(d) ? d : [])).catch(() => {});
-      api('/academic-admin/class-performance').then(d => setClassPerformance(Array.isArray(d) ? d : [])).catch(() => {});
-    };
 
     // ─── ACTIONS ──────────────────────────────────────────────────────
     const createTeacher = async () => {
@@ -241,10 +231,10 @@
       if (!studentForm.fullName) { Swal.fire('Missing Fields', 'Student name required', 'warning'); return; }
       setSaving(true);
       try {
-        const d = await api('/academic-admin/students', { method: 'POST', body: JSON.stringify(studentForm) });
+        await api('/academic-admin/students', { method: 'POST', body: JSON.stringify(studentForm) });
         Swal.fire({
           title: 'Student Added',
-          html: `<b>${studentForm.fullName}</b> signs in with their SDMS code:<br><code style="font-size:1.1rem;letter-spacing:2px">${d.sdmsCode}</code><br><small>They set a password on first login.</small>`,
+          html: `<b>${studentForm.fullName}</b> has been added to the portal.<br><small>They can sign in with their assigned credentials and set a new password on first login.</small>`,
           icon: 'success'
         });
         setStudentModal(false); setStudentForm({ fullName: '', email: '', classId: '', parentName: '', parentPhone: '' });
@@ -280,23 +270,7 @@
         id: 'g-academics', label: 'Academics', icon: 'fas fa-book',
         items: [
           { id: 'subjects', label: 'Subject Allocation', icon: 'fas fa-book-open' },
-          { id: 'timetable', label: 'Timetable', icon: 'fas fa-calendar-alt' },
           { id: 'exams', label: 'Exams', icon: 'fas fa-pen-square' },
-        ]
-      },
-      {
-        id: 'g-assessment', label: 'Assessment', icon: 'fas fa-award',
-        items: [
-          { id: 'reportcards', label: 'Report Cards', icon: 'fas fa-award' },
-          { id: 'performance', label: 'Performance', icon: 'fas fa-chart-bar' },
-          { id: 'analytics', label: 'Analytics', icon: 'fas fa-chart-line' },
-          { id: 'promotion', label: 'Promotion', icon: 'fas fa-sort-numeric-up' },
-        ]
-      },
-      {
-        id: 'g-quality', label: 'Quality', icon: 'fas fa-clipboard-check',
-        items: [
-          { id: 'lessonreview', label: 'Lesson Review', icon: 'fas fa-clipboard-check' },
         ]
       },
       {
@@ -308,9 +282,7 @@
       {
         id: 'g-content', label: 'Content & System', icon: 'fas fa-gears',
         items: [
-          { id: 'calendar', label: 'Calendar', icon: 'fas fa-calendar-days' },
           { id: 'content', label: 'Website content', icon: 'fas fa-newspaper' },
-          { id: 'sdms', label: 'SDMS Codes', icon: 'fas fa-id-card' },
           { id: 'profile', label: 'Profile', icon: 'fas fa-user-shield' },
         ]
       },
@@ -411,7 +383,7 @@
                 <div className="stats-g" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14, marginBottom: 20 }}>
                   <StatCard icon="fas fa-chalkboard-user" label="Teachers" value={teachers.length} sub="Active educators" accent="#27ae60" bg="#e8f5e9" onClick={() => setActiveTab('teachers')} />
                   <StatCard icon="fas fa-school" label="Classes" value={classes.length} sub="Active classes" accent="#3498db" bg="#e3f2fd" onClick={() => setActiveTab('classes')} />
-                  <StatCard icon="fas fa-user-graduate" label="Students" value={students.length} sub="Enrolled students" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('students')} />
+                  <StatCard icon="fas fa-user-graduate" label="Students" value={students.length} sub="Active students" accent="#9b59b6" bg="#f3e5f5" onClick={() => setActiveTab('students')} />
                 </div>
               </div>
             )}
@@ -475,11 +447,11 @@
             {activeTab === 'students' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-                  <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Students</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{students.length} students enrolled</p></div>
+                  <div><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Students</h2><p style={{ margin: '3px 0 0', fontSize: 12, color:'var(--text-faint)' }}>{students.length} students</p></div>
                   <Btn onClick={() => setStudentModal(true)} icon="fas fa-user-plus" color="#1a3a5c">Add Student</Btn>
                 </div>
                 <div style={{ background:'var(--surface-card)', borderRadius: 14, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                  <Table cols={['Student', 'Email', 'Class', 'Parent', 'Contact', 'Actions']} emptyMsg="No students enrolled yet."
+                  <Table cols={['Student', 'Email', 'Class', 'Parent', 'Contact', 'Actions']} emptyMsg="No students yet."
                     rows={students.map(s => (
                       <><TD><div style={{ display: 'flex', alignItems: 'center', gap: 9 }}><Avatar name={s.fullName} size={30} /><div><div style={{ fontWeight: 600, fontSize: 13 }}>{s.fullName}</div><div style={{ fontSize: 11, color:'var(--text-faint)' }}>{s.studentId || ''}</div></div></div></TD>
                         <TD style={{ fontSize: 12 }}>{s.email || '—'}</TD>
@@ -496,52 +468,9 @@
             {/* ══ SHARED WEBSITE CONTENT ══ */}
             {activeTab === 'content' && <WebsiteContentPanel role="academic_admin" />}
 
-            {/* ══ PERFORMANCE ══ */}
-            {activeTab === 'performance' && (
-              <div>
-                <div style={{ marginBottom: 18 }}><h2 style={{ margin: 0, fontSize: 19, color:'var(--navy)', fontFamily: 'Georgia, serif' }}>Academic Performance</h2></div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 18 }}>
-                  <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                    <h3 style={{ margin: '0 0 14px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}><i className="fas fa-chart-bar" style={{ marginRight: 7, color: '#3498db' }} />Class Performance</h3>
-                    {classPerformance.length === 0 && <p style={{ textAlign: 'center', color:'var(--text-faint-2)', fontSize: 13 }}>No data available</p>}
-                    {classPerformance.map((c, i) => (
-                      <div key={i} style={{ marginBottom: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
-                          <span>{c.className}</span><span style={{ fontWeight: 700, color: c.averageScore >= 70 ? '#27ae60' : '#e74c3c' }}>{c.averageScore}%</span>
-                        </div>
-                        <div style={{ height: 8, background:'var(--surface-page)', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${c.averageScore}%`, background: c.averageScore >= 70 ? '#27ae60' : '#e74c3c', borderRadius: 4, transition: 'width .5s' }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ background:'var(--surface-card)', borderRadius: 14, padding: 18, boxShadow: '0 2px 10px rgba(0,0,0,.05)' }}>
-                    <h3 style={{ margin: '0 0 14px', fontSize: 14, color:'var(--navy)', fontWeight: 600 }}><i className="fas fa-trophy" style={{ marginRight: 7, color: '#f39c12' }} />Top Students</h3>
-                    <Table cols={['Student', 'Class', 'Average']} emptyMsg="No data yet."
-                      rows={studentPerformance.slice(0, 10).map((s, i) => (
-                        <><TD><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: i < 3 ? '#ffc107' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: i < 3 ? '#1a3a5c' : '#888' }}>{i + 1}</div>
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</span>
-                        </div></TD>
-                          <TD style={{ fontSize: 12 }}>{s.class}</TD>
-                          <TD><span style={{ fontWeight: 700, color: s.averageScore >= 70 ? '#27ae60' : '#e74c3c' }}>{s.averageScore}%</span></TD></>
-                      ))}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* ══ ACADEMIC OPS PANELS ══ */}
             {activeTab === 'subjects' && <SubjectAllocationPanel classes={classes} teachers={teachers} />}
-            {activeTab === 'timetable' && <TimetablePanel classes={classes} teachers={teachers} />}
             {activeTab === 'exams' && <ExamsPanel classes={classes} />}
-            {activeTab === 'reportcards' && <ReportCardsPanel classes={classes} />}
-            {activeTab === 'promotion' && <PromotionPanel classes={classes} />}
-            {activeTab === 'analytics' && <AnalyticsPanel classes={classes} />}
-            {activeTab === 'lessonreview' && <LessonReviewPanel />}
-            {activeTab === 'sdms' && <SdmsPanel classes={classes} />}
-            {activeTab === 'calendar' && <CalendarPanel />}
 
             {/* ══ ANNOUNCEMENTS ══ */}
             {activeTab === 'announcements' && (
