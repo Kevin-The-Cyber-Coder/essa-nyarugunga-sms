@@ -1,516 +1,239 @@
-ESSA Nyarugunga School Management System
-Professional README
+# ESSA Nyarugunga School Management System
 
-📖 Usage Guide
-Quick Start Guide
-1. Logging In
-Navigate to http://localhost:5173
+A focused web platform for **ESSA Nyarugunga** that brings the school's public website and internal administration into one system. The public side presents the school, its programmes, admissions, news and gallery. The private side provides eight role-specific portals with server-enforced access control.
 
-Enter email: admin@essa.rw
+The current build is deliberately essential-only: admissions, academics, discipline, finance, registration, communication and website content. It does **not** include quizzes, attendance, timetables, lesson plans, analytics dashboards, calendars/events, report cards, promotion/enrollment workflows, SDMS codes, permission slips, subscriptions/newsletters, chat, push notifications, SMS, payroll, or parent online payment.
 
-Enter password: admin123
+---
 
-Click "Sign In" — the account's role determines the portal you are redirected to.
-There is no role selector; the backend decides the role from the account record.
+## Screenshots
 
-2. Creating an Academic Admin
-Go to Headmaster Dashboard
+Captured from the running local application after the database reset, so empty counters on the dashboard are expected.
 
-Click "Create Admin"
+| Public website | Portal sign-in |
+| --- | --- |
+| ![ESSA public home page](docs/screenshots/home.png) | ![Role-based portal sign in](docs/screenshots/portal-login.png) |
 
-Fill in: Name, Email, Phone
+| About ESSA | Academic programmes |
+| --- | --- |
+| ![About page](docs/screenshots/about.png) | ![Academics page](docs/screenshots/academics.png) |
 
-Select Role: "Academic Admin"
+| Admissions | News |
+| --- | --- |
+| ![Admissions page](docs/screenshots/admissions.png) | ![School news page](docs/screenshots/news.png) |
 
-Click "Create"
+### Headmaster portal
 
-3. Creating a Class
-Login as Academic Admin
+![Headmaster dashboard](docs/screenshots/headmaster-dashboard.png)
 
-Go to "Class Management"
+---
 
-Fill class details:
+## What the system does
 
-Class Name (e.g., "S3A")
+### Public website
 
-Grade (e.g., "S3")
+- Responsive home, about, academics, admissions, news, gallery and contact pages.
+- Online admission application form with duplicate detection.
+- News and gallery items drawn from published CMS records only.
+- Privacy, terms, accessibility, sitemap and search pages.
 
-Academic Year (e.g., "2024-2025")
+### Eight role portals
 
-Click "Create Class"
+| Role | Portal route | Primary responsibilities |
+| --- | --- | --- |
+| Headmaster | `/portal/headmaster` | Final admission decisions, staff oversight, whole-school visibility, announcements |
+| Academic Administrator | `/portal/academic-admin` | Classes, subjects, teacher allocation, exams, final result review and publication |
+| Discipline Administrator | `/portal/discipline-admin` | Discipline records, conduct follow-up and parent notification |
+| Accounts Administrator | `/portal/accounts-admin` | Fee structures, invoices, payments, expenses and budgets |
+| Admin Assistant | `/portal/admin-assistant` | Application review, registration, student/parent/staff records, documents |
+| Teacher | `/portal/teacher` | Enter marks for assigned subjects/classes, assignments, resources and class notices |
+| Parent | `/portal/parent` | View only linked and verified children's grades, fees, discipline and documents |
+| Student | `/portal/student` | View only their own grades, fees, assignments and announcements |
 
-4. Adding a Teacher
-Go to "Teacher Management"
+`super_admin` remains as a compatibility alias for `headmaster` in both role configurations. It is not a ninth role.
 
-Click "Add Teacher"
+### Website content management
 
-Fill teacher details
+There is no standalone CMS route. The shared content editor is embedded only in dashboards whose role is authorized to manage content.
 
-Click "Create Teacher"
+- Categories: `academic`, `discipline`, `financial`, `general`.
+- Lifecycle: `draft` → `scheduled` → `published`.
+- Scheduled items become public automatically when their publish time arrives.
+- Category ownership is checked on the backend before create, edit, delete or status changes.
 
-Note the generated password
+### Admissions
 
-5. Assigning Teacher to Class
-Go to "Class Management"
+- Public application submission.
+- Duplicate detection by email, phone and verified national/ID number.
+- Status flow: `submitted` → `under_review` → `approved` / `rejected` → `registered`.
+- `registered` can only be set through the dedicated registration endpoint after approval; it cannot be chosen directly in the status workflow.
+- Admin Assistants review and register; the Headmaster makes final approval and rejection decisions.
 
-Find the class
+### Academics and results
 
-Click "Assign Teacher"
+- Teachers enter marks for their assigned classes and subjects.
+- Academic Administrators review and publish final results.
+- Students and parents see only records they are authorized to see.
+- Assignments, class resources and announcements remain available to teachers.
 
-Select teacher from dropdown
+### Notifications
 
-Confirm assignment
+- Delivery channels: **in-app notifications and email only**.
+- No push, SMS, chat or newsletter delivery.
+- Notification preferences are per user and cover the canonical backend notification types.
+- Schedulers publish due website content, release due announcements and send assignment/exam reminders.
 
-6. Creating Student Accounts
-Login as Admin Assistant (after the Headmaster approves the application)
+---
 
-Go to "Applications" and register the approved applicant, or use "Students" for manual records
+## Security model
 
-Click "Create Student"
+- Role definitions are mirrored in `frontend/src/config/roles.js` and `backend/config/roles.js`.
+- Frontend guards hide irrelevant navigation, but **hidden navigation is not the security boundary**. Every privileged endpoint is checked again by backend middleware using the authenticated user's role.
+- Teacher data is scoped by class and subject allocation.
+- Parent data is scoped to linked, verified children.
+- Student data is scoped to the authenticated student's own records.
+- JWT authentication, rate limiting, Helmet security headers and CORS origin allowlisting are enabled.
+- First-time/generated account passwords require a password change before portal access.
 
-Fill student and parent details
+---
 
-Select class
+## Technology stack
 
-Click "Create"
+**Frontend:** React 19, Vite 8, React Router, Axios, SweetAlert2  
+**Backend:** Node.js, Express, MongoDB/Mongoose, JWT, Nodemailer, Multer  
+**Delivery:** In-app notifications + SMTP email; local uploads served from `/uploads`
 
-7. Recording Attendance
-Go to "Attendance"
+---
 
-Select date
+## Project structure
 
-Select class
+```text
+backend/
+  config/          Database, roles, rate limits, upload settings
+  models/          Mongoose schemas
+  routes/          Public and role-scoped API routes
+  utils/           Notifications, email, schedulers and access helpers
+  scripts/         Explicit database reset script
+frontend/
+  public/          Static assets
+  src/
+    components/    Shared UI, navigation and notifications
+    config/        Role and permission definitions
+    pages/         Public website pages
+    portals/       Eight role dashboards and shared panels
+    utils/         Small browser helpers
+docs/screenshots/  Real screenshots of the running application
+```
 
-Mark present/absent for each student
+---
 
-Click "Save Attendance"
+## Getting started
 
-8. Creating Assignments
-Go to "Assignments"
+### Prerequisites
 
-Click "Create Assignment"
+- Node.js 20.19+ (required by Vite 8)
+- MongoDB running locally or a reachable MongoDB URI
+- npm
+- SMTP credentials if you want email delivery to work
 
-Fill title, description, due date
+### 1. Install dependencies
 
-Select class and subject
+```bash
+cd backend
+npm install
 
-Set total points
+cd ../frontend
+npm install
+```
 
-Publish assignment
+### 2. Configure environment
 
-Role model
-There are exactly eight internal roles, enforced on both the frontend and the backend:
-
-- headmaster — final admissions decisions, oversight, website content
-- academic_admin — classes, subjects, teachers, exams and final result publication
-- discipline_admin — discipline cases and conduct records
-- accounts_admin — fees, invoices, payments, expenses and budgets
-- admin_assistant — application review, registration and parent/student linking
-- teacher — assigned classes/subjects, marks, attendance and class resources
-- parent — linked/verified children only
-- student — own records only
-
-Website content (news and gallery) is managed from an embedded "Website content"
-panel inside an authorized dashboard; there is no standalone CMS login or route.
-Admissions move through submitted → under_review (Admin Assistant) →
-approved/rejected (Headmaster) → registered (Admin Assistant).
-
-🧪 Testing
-API Testing with cURL
-bash
-# Health Check
-curl http://localhost:5000/api/health
-
-# Login
-curl -X POST http://localhost:5000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@essa.rw","password":"admin123"}'
-
-# Get all classes (with token)
-curl http://localhost:5000/api/academic-admin/classes \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE"
-
-# Create class
-curl -X POST http://localhost:5000/api/academic-admin/classes \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
-  -d '{"className":"S3A","grade":"S3","academicYear":"2024-2025"}'
-Testing Script
-javascript
-// test.js - Run with: node test.js
-const testAPI = async () => {
-  // Test Login
-  const loginRes = await fetch('http://localhost:5000/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: 'admin@essa.rw',
-      password: 'admin123'
-    })
-  });
-  
-  const data = await loginRes.json();
-  console.log('Login:', data.success ? '✅ Passed' : '❌ Failed');
-  console.log('Token:', data.token);
-  
-  // Test Health
-  const healthRes = await fetch('http://localhost:5000/api/health');
-  console.log('Health Check:', healthRes.ok ? '✅ Passed' : '❌ Failed');
-};
-
-testAPI();
-🚢 Deployment
-Deploying Backend to Production
-Option 1: Deploy on VPS (Ubuntu)
-bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# Install PM2
-sudo npm install -g pm2
-
-# Clone project
-git clone https://github.com/Kevin-The-Cyber-Coder/essa-nyarugunga-school.git
-cd essa-nyarugunga/backend
-
-# Install dependencies
-npm install --production
-
-# Setup environment
-cat > .env << EOF
-PORT=5000
-MONGODB_URI=mongodb://127.0.0.1:27017/essa_school
-JWT_SECRET=your_secure_secret_key
-NODE_ENV=production
-EOF
-
-# Start with PM2
-pm2 start server.js --name essa-backend
-pm2 save
-pm2 startup
-
-# Setup Nginx as reverse proxy
-sudo apt install nginx -y
-Nginx Configuration:
-
-nginx
-server {
-    listen 80;
-    server_name api.yourdomain.com;
-
-    location / {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-Option 2: Deploy on MongoDB Atlas
-Create account at MongoDB Atlas
-
-Create a cluster (free tier available)
-
-Get connection string: mongodb+srv://username:password@cluster.mongodb.net/essa_school
-
-Update .env with Atlas connection string
-
-Deploying Frontend to Production
-Build for Production
-bash
-# Build the frontend
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+Update `backend/.env` with your MongoDB URI, JWT secret, frontend URL and SMTP credentials. The checked-in defaults use:
+
+```text
+Backend API:  http://localhost:5001
+Frontend:     http://localhost:5174
+Database:     mongodb://127.0.0.1:27017/essa_school
+```
+
+`FRONTEND_URL` and `VITE_API_URL` must match the URLs you actually open. Email delivery needs valid SMTP credentials; the rest of the system still runs without them.
+
+### 3. Start the services
+
+In one terminal:
+
+```bash
+cd backend
+npm run dev
+```
+
+In another terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open <http://localhost:5174>.
+
+### 4. First login
+
+```text
+Email:    admin@essa.rw
+Password: admin123
+```
+
+This is the only account created by the fresh reset. Create the other seven roles from the Headmaster and Admin Assistant dashboards.
+
+---
+
+## Resetting the local database
+
+The reset is intentionally explicit and must never be called from application startup.
+
+> **Warning:** this drops every collection and permanently deletes all local records.
+
+From the `backend/` directory, with MongoDB running:
+
+```bash
+node scripts/resetDatabase.js
+```
+
+After a successful reset, the only user is:
+
+```text
+admin@essa.rw / admin123
+```
+
+Restart the backend after resetting so in-memory scheduler state is clean.
+
+---
+
+## Verification
+
+```bash
+# Frontend production build
 cd frontend
 npm run build
 
-# The build will be in the 'dist' folder
-Deploy to Vercel
-bash
-# Install Vercel CLI
-npm i -g vercel
+# Backend syntax check (all JS files)
+cd ../backend
+node --check server.js
+```
 
-# Deploy
-vercel --prod
-Deploy to Netlify
-bash
-# Install Netlify CLI
-npm i -g netlify-cli
+The current local verification also confirms that signing in as `admin@essa.rw / admin123` redirects to `/portal/headmaster`.
 
-# Deploy
-netlify deploy --prod --dir=dist
-Docker Deployment
-dockerfile
-# Dockerfile for Backend
-FROM node:22-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 5000
-CMD ["node", "server.js"]
-dockerfile
-# Dockerfile for Frontend
-FROM node:22-alpine as build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+---
 
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  mongodb:
-    image: mongo:8
-    restart: always
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
+## Notes for maintainers
 
-  backend:
-    build: ./backend
-    restart: always    ports:
-      - "5000:5000"
-    depends_on:
-      - mongodb
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017/essa_school
-      - JWT_SECRET=your_secret_key
-
-  frontend:
-    build: ./frontend
-    restart: always
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-
-volumes:
-  mongodb_data:
-🔧 Troubleshooting
-Common Issues and Solutions
-Issue 1: MongoDB Connection Failed
-bash
-Error: MongoNetworkError: connect ECONNREFUSED 127.0.0.1:27017
-Solution:
-
-bash
-# Start MongoDB service
-sudo systemctl start mongod  # Linux
-net start MongoDB            # Windows
-brew services start mongodb  # Mac
-
-# Check if MongoDB is running
-mongod --version
-Issue 2: Port Already in Use
-bash
-Error: listen EADDRINUSE: address already in use :::5000
-Solution:
-
-bash
-# Find process using port 5000
-lsof -i :5000  # Mac/Linux
-netstat -ano | findstr :5000  # Windows
-
-# Kill the process
-kill -9 <PID>  # Mac/Linux
-taskkill /PID <PID> /F  # Windows
-
-# Or use different port
-PORT=5001 node server.js
-Issue 3: JWT Token Expired
-bash
-Error: TokenExpiredError: jwt expired
-Solution:
-
-javascript
-// Regenerate token with longer expiry
-const token = jwt.sign(
-  { id: user._id, role: user.role },
-  SECRET,
-  { expiresIn: '30d' }  // Extended expiry
-);
-Issue 4: CORS Error in Browser
-bash
-Access to XMLHttpRequest has been blocked by CORS policy
-Solution:
-
-javascript
-// In server.js, configure CORS properly
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-Issue 5: Socket.IO Connection Failed
-bash
-WebSocket connection to 'ws://localhost:5000/socket.io/' failed
-Solution:
-
-javascript
-// Client side connection with proper config
-const socket = io('http://localhost:5000', {
-  transports: ['websocket', 'polling'],
-  withCredentials: true
-});
-Debugging Commands
-bash
-# Check Node.js version
-node --version
-
-# Check npm packages
-npm list --depth=0
-
-# Check MongoDB connection
-mongosh --eval "db.runCommand({ping: 1})"
-
-# Check backend logs
-pm2 logs essa-backend
-
-# Test API endpoint
-curl -I http://localhost:5000/api/health
-
-# Check environment variables
-printenv | grep -E "PORT|MONGODB|JWT"
-🤝 Contributing
-Contribution Guidelines
-Fork the repository
-
-Create a feature branch
-
-bash
-git checkout -b feature/awesome-feature
-Commit changes
-
-bash
-git commit -m "Add awesome feature"
-Push to branch
-
-bash
-git push origin feature/awesome-feature
-Open a Pull Request
-
-Development Workflow
-bash
-# Clone your fork
-git clone https://github.com/Kevin-The-Cyber-Coder/essa-nyarugunga-school.git
-
-# Add upstream remote
-git remote add upstream https://github.com/Kevin-The-Cyber-Coder/essa-nyarugunga-school.git
-
-# Create branch
-git checkout -b feature-name
-
-# Make changes and commit
-git add .
-git commit -m "Description of changes"
-
-# Push to your fork
-git push origin feature-name
-
-# Sync with upstream
-git fetch upstream
-git merge upstream/main
-Code Style
-Backend: Use ESLint with Airbnb style guide
-
-Frontend: Use Prettier for formatting
-
-Commit Messages: Conventional commits format
-
-bash
-# Conventional commit format
-type(scope): description
-
-# Examples
-feat(auth): add JWT authentication
-fix(teacher): resolve class assignment bug
-docs(readme): update installation guide
-style(ui): improve dashboard layout
-📄 License
-This project is licensed under the MIT License - see below for details:
-
-text
-MIT License
-
-Copyright (c) 2024 ESSA Nyarugunga School
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-📞 Contact
-Development Team
-Role	            Name                	Contact
-Lead Developer	    Mukeshimana Kevin 	    kevineniyomurinzi@gmail.com
-Backend Developer	Mugisha Ishaq	        mugishaishaq8@gmail.com
-Frontend Developer	UI Team	                jeanvierog@gmail.com
-Database Admin	    Mukeshimana Kevin	    kevineniyomurinzi@gmail.com
-School Information
-
-ESSA Nyarugunga School
-Nyarugunga Sector, Kigali
-Rwanda
-
-Phone: +250 788 123 456
-Email: info@essa.rw
-Website: www.essa.rw
-Support Channels
-Technical Support: kevineniyomurinzi@gmail.com
-
-Report Issues: https://github.com/yourusername/essa-nyarugunga/issues
-
-Documentation: https://docs.essa.rw
-
-Notifications: in-app and email only (no chat, SMS or push alerts)
-
-🙏 Acknowledgments
-Thanks to all contributors and testers
-
-Special thanks to the school administration for support
-
-Open source community for amazing tools and libraries
-
-📊 Project Statistics
-text
-├── Backend
-│   ├── 25+ API Endpoints
-│   ├── 12 MongoDB Models
-│   ├── 8 Middleware Functions
-│   └── 3,500+ Lines of Code
-│
-├── Frontend
-│   ├── 15 React Components
-│   ├── 6 Main Pages
-│   ├── 8 Role-based Dashboards
-│   └── 2,800+ Lines of Code
-│
-└── Database
-    ├── 12 Collections
-    ├── 45+ Fields
-    └── 30+ Indexes
-<div align="center"> <strong>Built with ❤️ for ESSA Nyarugunga School</strong> <br> <sub>© 2024 ESSA Nyarugunga School. All rights reserved.</sub> </div>
+- Keep `backend/config/roles.js` and `frontend/src/config/roles.js` aligned. The backend map is authoritative for access control.
+- Preserve `ROLE_ALIASES = Object.freeze({ super_admin: ROLES.HEADMASTER })` for stored legacy records.
+- Admission status transitions belong in `backend/routes/admissionsAdminRoutes.js`; do not allow clients to set `registered` directly.
+- Website content must stay embedded in authorized dashboards; do not reintroduce a standalone CMS route.
+- The local pre-refactor backup directory is ignored by Git and must never be committed.
