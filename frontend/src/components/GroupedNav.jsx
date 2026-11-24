@@ -3,12 +3,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 /*
  * Grouped sidebar navigation.
  *
- * Every portal is limited to exactly seven top-level tabs, but the features
- * behind them are far more numerous. Rather than drop features, each portal
- * declares seven domains and the remaining screens become sub-navigation
- * inside the active domain. The screen components are untouched: a sub-item
- * just sets the same tab id the flat menu used to set, so the existing
- * `activeTab === '...'` render blocks keep working.
+ * Each portal declares at most seven top-level domains; the screens behind
+ * them become sub-navigation inside the active domain. A pruned role may
+ * expose fewer domains, but no portal should grow beyond seven. The screen
+ * components are untouched: a sub-item just sets the same tab id the flat
+ * menu used to set, so the existing `activeTab === '...'` render blocks keep
+ * working.
  *
  * Expects the dark sidebar look shared by the headmaster, academic admin,
  * accounts admin, discipline admin, teacher and parent portals.
@@ -40,9 +40,9 @@ const GroupedNav = ({
     if (activeGroup) setOpenId(activeGroup.id);
   }, [activeGroup]);
 
-  if (process.env.NODE_ENV === 'development' && groups.length !== 7) {
+  if (process.env.NODE_ENV === 'development' && groups.length > 7) {
     // eslint-disable-next-line no-console
-    console.warn(`Portal nav must expose exactly 7 tabs, received ${groups.length}.`);
+    console.warn(`Portal nav must expose at most 7 tabs, received ${groups.length}.`);
   }
 
   const pick = (id) => {

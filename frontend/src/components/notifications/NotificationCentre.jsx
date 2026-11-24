@@ -4,15 +4,17 @@ import { timeAgo } from '../../utils/time';
 import './notifications.css';
 
 const TYPE_STYLE = {
+  system:         { icon: 'fa-shield-halved',   color: '#374151', label: 'System' },
   announcement:   { icon: 'fa-bullhorn',        color: '#16653f', label: 'Announcement' },
   assignment:     { icon: 'fa-book-open',       color: '#b45309', label: 'Assignment' },
-  homework:       { icon: 'fa-pen-to-square',   color: '#b45309', label: 'Homework' },
-  academic_feedback: { icon: 'fa-comment-dots', color: '#0e7490', label: 'Feedback' },
   admission:      { icon: 'fa-user-plus',       color: '#6d28d9', label: 'Admission' },
   exam:           { icon: 'fa-file-lines',      color: '#b91c1c', label: 'Exam' },
+  academic_feedback: { icon: 'fa-comment-dots', color: '#0e7490', label: 'Feedback' },
   fee:            { icon: 'fa-coins',           color: '#15803d', label: 'Fee' },
-  attendance:     { icon: 'fa-clipboard-check', color: '#4b5563', label: 'Attendance' },
-  system:         { icon: 'fa-shield-halved',   color: '#374151', label: 'System' }
+  finance:        { icon: 'fa-coins',           color: '#15803d', label: 'Finance' },
+  discipline:     { icon: 'fa-gavel',           color: '#b45309', label: 'Discipline' },
+  resource:       { icon: 'fa-folder-open',     color: '#0e7490', label: 'Resource' },
+  content:        { icon: 'fa-file-lines',      color: '#6d28d9', label: 'Content' }
 };
 
 const DEFAULT_STYLE = { icon: 'fa-bell', color: '#5f6b76', label: 'Notice' };

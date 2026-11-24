@@ -9,15 +9,17 @@ const CHANNEL_LABELS = {
 };
 
 const TYPE_LABELS = {
+  system: 'System alerts',
   announcement: 'Announcements',
   assignment: 'Assignments',
-  homework: 'Homework reminders',
-  academic_feedback: 'Academic feedback',
   admission: 'Admissions',
   exam: 'Exams',
+  academic_feedback: 'Academic feedback',
   fee: 'Fee reminders',
-  attendance: 'Attendance',
-  system: 'System alerts'
+  finance: 'Finance',
+  discipline: 'Discipline',
+  resource: 'Resources',
+  content: 'Content updates'
 };
 
 const minutesToTime = (m) => {
