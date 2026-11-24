@@ -112,6 +112,8 @@ There is no standalone CMS route. The shared content editor is embedded only in 
 | Frontend (Vercel) | <https://essa-nyarugunga-school-complex-syst-eta.vercel.app/> |
 | Backend API (Render) | <https://essa-api.onrender.com/> |
 
+Opening the backend URL returns a small JSON status response; `GET /api/health` is also available for Render health checks.
+
 Production builds use a single API base defined in `frontend/src/config/api.js`. It resolves to the Render URL automatically; a stale `VITE_API_URL` pointing at `localhost` is ignored in production builds. The backend allows the live Vercel origin (and this project's Vercel preview URLs) through CORS even when `FRONTEND_URL` is unset.
 
 Recommended dashboard variables:

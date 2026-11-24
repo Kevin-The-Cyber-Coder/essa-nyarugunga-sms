@@ -70,6 +70,28 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+const apiStatus = () => ({
+  success: true,
+  name: 'ESSA Nyarugunga API',
+  status: 'ok',
+  frontend: process.env.FRONTEND_URL || PRODUCTION_FRONTEND_URL
+});
+
+// Browsers land here when the bare API URL is opened. Keep the answer small and
+// useful; the actual application routes all live under /api.
+app.get('/', (req, res) => {
+  res.json({
+    ...apiStatus(),
+    endpoints: {
+      login: 'POST /api/auth/login',
+      publicNews: 'GET /api/news/public',
+      health: 'GET /api/health'
+    }
+  });
+});
+
+app.get('/api/health', (req, res) => res.json(apiStatus()));
+
 app.use('/api', apiLimiter);
 
 // ==================== ROUTES ====================
