@@ -105,6 +105,29 @@ There is no standalone CMS route. The shared content editor is embedded only in 
 
 ---
 
+## Deployed application
+
+| Service | Live URL |
+| --- | --- |
+| Frontend (Vercel) | <https://essa-nyarugunga-school-complex-syst-eta.vercel.app/> |
+| Backend API (Render) | <https://essa-api.onrender.com/> |
+
+Production builds use a single API base defined in `frontend/src/config/api.js`. It resolves to the Render URL automatically; a stale `VITE_API_URL` pointing at `localhost` is ignored in production builds. The backend allows the live Vercel origin (and this project's Vercel preview URLs) through CORS even when `FRONTEND_URL` is unset.
+
+Recommended dashboard variables:
+
+| Platform | Variable | Value |
+| --- | --- | --- |
+| Vercel | `VITE_API_URL` | `https://essa-api.onrender.com` (or leave unset) |
+| Render | `FRONTEND_URL` | `https://essa-nyarugunga-school-complex-syst-eta.vercel.app` |
+| Render | `JWT_SECRET` | Long random secret |
+| Render | `MONGODB_URI` | Production MongoDB connection string |
+| Render | `EMAIL_USER` / `EMAIL_PASS` | SMTP credentials for notification emails |
+
+Both `vercel.json` files include the SPA rewrite so direct links such as `/portal/headmaster` and `/set-password` serve `index.html` instead of a 404. If your Vercel project uses `frontend` as its Root Directory, `frontend/vercel.json` is used; otherwise the root `vercel.json` builds and serves `frontend/dist`.
+
+---
+
 ## Project structure
 
 ```text
