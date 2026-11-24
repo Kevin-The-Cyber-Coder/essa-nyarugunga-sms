@@ -29,9 +29,40 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const server = http.createServer(app);
 
+const PRODUCTION_FRONTEND_URL = 'https://essa-nyarugunga-school-complex-syst-eta.vercel.app';
+const LOCAL_FRONTEND_URLS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+];
+
+const parseOrigins = (value) =>
+  String(value || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+const allowedOrigins = new Set([
+  PRODUCTION_FRONTEND_URL,
+  ...LOCAL_FRONTEND_URLS,
+  ...parseOrigins(process.env.FRONTEND_URLS),
+  ...parseOrigins(process.env.FRONTEND_URL),
+]);
+
+// Vercel preview deployments use generated URLs under the same project name.
+const isProjectPreview = (origin) =>
+  /^https:\/\/essa-nyarugunga-school-complex-syst-eta(?:-[a-z0-9-]+)?\.vercel\.app$/i.test(origin);
+
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin) || isProjectPreview(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -95,7 +126,7 @@ connectDB()
       await seedDatabase();
     }
     server.listen(PORT, () => {
-      const target = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const target = process.env.FRONTEND_URL || PRODUCTION_FRONTEND_URL;
       console.log(`\n🚀 API      http://localhost:${PORT}`);
       console.log(`🚀 Frontend ${target}\n`);
       // Releases whatever quiet hours deferred. The timer is unref'd inside,

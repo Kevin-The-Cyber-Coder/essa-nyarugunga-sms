@@ -3,9 +3,14 @@ const jwt = require('jsonwebtoken');
 const emailTransporter = require('../config/email');
 const { getJWTSecret } = require('./jwt');
 
+const PRODUCTION_FRONTEND_URL = 'https://essa-nyarugunga-school-complex-syst-eta.vercel.app';
+const frontendUrl = (process.env.FRONTEND_URL || '')
+  .split(',')[0]
+  .trim() || PRODUCTION_FRONTEND_URL;
+
 const buildSetupLink = (userId) => {
   const token = jwt.sign({ id: userId, purpose: 'setup' }, getJWTSecret(), { expiresIn: '24h' });
-  const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const baseUrl = frontendUrl;
   return `${baseUrl}/set-password?token=${token}`;
 };
 
@@ -104,7 +109,7 @@ const sendAdmissionDecisionEmail = async (application) => {
 // working and simply not send.
 const sendNotificationEmail = async (user, { title, body, link }) => {
   if (!process.env.EMAIL_USER || !user || !user.email) return false;
-  const origin = process.env.FRONTEND_URL || 'http://localhost:5174';
+  const origin = frontendUrl;
   const action = link
     ? `<p style="text-align:center;margin:24px 0;">
          <a href="${link.startsWith('http') ? link : origin + link}"
