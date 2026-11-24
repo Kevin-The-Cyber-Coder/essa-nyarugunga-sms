@@ -101,7 +101,7 @@ There is no standalone CMS route. The shared content editor is embedded only in 
 
 **Frontend:** React 19, Vite 8, React Router, Axios, SweetAlert2  
 **Backend:** Node.js, Express, MongoDB/Mongoose, JWT, Nodemailer, Multer  
-**Delivery:** In-app notifications + SMTP email; local uploads served from `/uploads`
+**Delivery:** In-app notifications + Resend email; local uploads served from `/uploads`
 
 ---
 
@@ -122,7 +122,9 @@ Recommended dashboard variables:
 | Render | `FRONTEND_URL` | `https://essa-nyarugunga-school-complex-syst-eta.vercel.app` |
 | Render | `JWT_SECRET` | Long random secret |
 | Render | `MONGODB_URI` | Production MongoDB connection string |
-| Render | `EMAIL_USER` / `EMAIL_PASS` | SMTP credentials for notification emails |
+| Render | `RESEND_API_KEY` | Resend API key with send permission |
+| Render | `EMAIL_FROM` | Verified Resend sender, e.g. `ESSA Nyarugunga <no-reply@your-domain>` |
+| Render | `ADMIN_EMAIL` | Recipient for contact-form notifications |
 
 Both `vercel.json` files include the SPA rewrite so direct links such as `/portal/headmaster` and `/set-password` serve `index.html` instead of a 404. If your Vercel project uses `frontend` as its Root Directory, `frontend/vercel.json` is used; otherwise the root `vercel.json` builds and serves `frontend/dist`.
 
@@ -157,7 +159,7 @@ docs/screenshots/  Real screenshots of the running application
 - Node.js 20.19+ (required by Vite 8)
 - MongoDB running locally or a reachable MongoDB URI
 - npm
-- SMTP credentials if you want email delivery to work
+- A Resend API key and a verified sender domain if you want email delivery to work
 
 ### 1. Install dependencies
 
@@ -176,7 +178,7 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 ```
 
-Update `backend/.env` with your MongoDB URI, JWT secret, frontend URL and SMTP credentials. The checked-in defaults use:
+Update `backend/.env` with your MongoDB URI, JWT secret, frontend URL and Resend credentials. The checked-in defaults use:
 
 ```text
 Backend API:  http://localhost:5001
@@ -184,7 +186,7 @@ Frontend:     http://localhost:5174
 Database:     mongodb://127.0.0.1:27017/essa_school
 ```
 
-`FRONTEND_URL` and `VITE_API_URL` must match the URLs you actually open. Email delivery needs valid SMTP credentials; the rest of the system still runs without them.
+`FRONTEND_URL` and `VITE_API_URL` must match the URLs you actually open. Email delivery needs a valid `RESEND_API_KEY` and a verified `EMAIL_FROM`; the rest of the system still runs without them. Verify the sender in Resend before going live, since `resend.dev` test senders only deliver to the email on your Resend account.
 
 ### 3. Start the services
 
@@ -247,6 +249,9 @@ npm run build
 # Backend syntax check (all JS files)
 cd ../backend
 node --check server.js
+
+# Optional: send a test email through Resend (requires RESEND_API_KEY and EMAIL_FROM)
+node test.js
 ```
 
 The current local verification also confirms that signing in as `admin@essa.rw / admin123` redirects to `/portal/headmaster`.
