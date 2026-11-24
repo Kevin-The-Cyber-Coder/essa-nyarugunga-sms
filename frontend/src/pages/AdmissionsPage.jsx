@@ -330,7 +330,7 @@ const AdmissionsPage = () => {
               <h3>Required Documents</h3>
               <ul>
                 <li><i className="fas fa-check"></i> Birth Certificate (2 copies)</li>
-                <li><i className="fas fa-check"></i> Last 2 years' Report Cards</li>
+                <li><i className="fas fa-check"></i> Last 2 years' academic transcripts</li>
                 <li><i className="fas fa-check"></i> 4 Passport Photos</li>
                 <li><i className="fas fa-check"></i> Medical Certificate</li>
                 <li><i className="fas fa-check"></i> Parent/Guardian ID copies</li>

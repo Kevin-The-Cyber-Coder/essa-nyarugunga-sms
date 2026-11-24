@@ -323,7 +323,6 @@ const TermsOfUse = () => {
                   <h4>Allowed Activities</h4>
                   <ul>
                     <li>Accessing school information</li>
-                    <li>Viewing academic calendars</li>
                     <li>Contacting school officials</li>
                     <li>Applying for admissions</li>
                     <li>Accessing educational resources</li>

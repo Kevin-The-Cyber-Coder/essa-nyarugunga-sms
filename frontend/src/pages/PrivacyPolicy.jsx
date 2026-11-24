@@ -261,7 +261,7 @@ const PrivacyPolicy = () => {
                   <h4>Student Information</h4>
                   <ul>
                     <li><i className="fas fa-check-circle"></i> Academic records & transcripts</li>
-                    <li><i className="fas fa-check-circle"></i> Attendance & behavior reports</li>
+                    <li><i className="fas fa-check-circle"></i> Conduct & behaviour reports</li>
                     <li><i className="fas fa-check-circle"></i> Medical information (with consent)</li>
                     <li><i className="fas fa-check-circle"></i> Learning progress & assessments</li>
                   </ul>
@@ -452,11 +452,6 @@ const PrivacyPolicy = () => {
                   <div><i className="fas fa-cookie"></i> Essential</div>
                   <div>Required for basic site functionality</div>
                   <div>Session</div>
-                </div>
-                <div className="cookie-row">
-                  <div><i className="fas fa-chart-simple"></i> Analytics</div>
-                  <div>Understand how visitors use our site</div>
-                  <div>2 Years</div>
                 </div>
                 <div className="cookie-row">
                   <div><i className="fas fa-user-check"></i> Functional</div>

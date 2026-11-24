@@ -7,7 +7,7 @@ import '../App.css';
 const PAGES = [
   { to: '/', title: 'Home', text: 'ESSA Nyarugunga school website' },
   { to: '/about', title: 'About us', text: 'Our mission, history, leadership and campus' },
-  { to: '/academics', title: 'Academics', text: 'Curriculum, programmes and school calendar' },
+  { to: '/academics', title: 'Academics', text: 'Curriculum, programmes and learning support' },
   { to: '/admissions', title: 'Admissions', text: 'Apply to ESSA Nyarugunga, requirements and process' },
   { to: '/news', title: 'News', text: 'School news and announcements' },
   { to: '/gallery', title: 'Gallery', text: 'Photos from school life' },
