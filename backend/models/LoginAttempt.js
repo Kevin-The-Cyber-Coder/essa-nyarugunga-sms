@@ -16,7 +16,7 @@ const loginAttemptSchema = new mongoose.Schema({
   success: { type: Boolean, required: true },
   // machine-readable: ok | bad_password | no_such_user | inactive | locked
   outcome: String,
-  method: { type: String, enum: ['password', 'sdms'], default: 'password' },
+  method: { type: String, enum: ['password'], default: 'password' },
   ip: String,
   userAgent: String,
   createdAt: { type: Date, default: Date.now, index: true }

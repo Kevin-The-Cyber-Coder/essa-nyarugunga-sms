@@ -8,7 +8,7 @@ const User = require('../models/User');
 const Class = require('../models/Class');
 const ParentProfile = require('../models/ParentProfile');
 const { sendAdmissionDecisionEmail } = require('../utils/emailService');
-const { issueCode } = require('../utils/sdms');
+const { rememberPassword } = require('../utils/loginSecurity');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
 const { ROLES } = require('../config/roles');
@@ -379,15 +379,19 @@ router.post('/applications/:id/register', authMiddleware, requireRole(ROLES.ADMI
       return res.status(400).json({ message: 'The selected class does not exist.' });
     }
 
+    const generatedPassword = crypto.randomBytes(9).toString('base64url').slice(0, 12) + '7';
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10);
     const user = await User.create({
       fullName: application.fullName,
       email: application.email,
       phone: application.parentPhone,
-      password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10),
+      password: hashedPassword,
       role: ROLES.STUDENT,
       mustChangePassword: true,
       createdBy: req.userId
     });
+    await rememberPassword(user, hashedPassword);
+    await user.save();
 
     const student = await Student.create({
       userId: user._id,
@@ -400,7 +404,6 @@ router.post('/applications/:id/register', authMiddleware, requireRole(ROLES.ADMI
     });
 
     if (classId) await Class.findByIdAndUpdate(classId, { $addToSet: { students: student._id } });
-    const sdmsCode = await issueCode(student);
 
     const from = application.status;
     application.status = 'registered';
@@ -412,7 +415,7 @@ router.post('/applications/:id/register', authMiddleware, requireRole(ROLES.ADMI
     });
     await application.save();
 
-    res.json({ success: true, student, sdmsCode, applicationNumber: application.applicationNumber });
+    res.json({ success: true, student, password: generatedPassword, generated: true, applicationNumber: application.applicationNumber });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

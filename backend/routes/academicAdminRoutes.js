@@ -10,7 +10,6 @@ const TeacherProfile = require('../models/TeacherProfile');
 const Student = require('../models/Student');
 const Class = require('../models/Class');
 const Grade = require('../models/Grade');
-const Attendance = require('../models/Attendance');
 const Discipline = require('../models/Discipline');
 const FeePayment = require('../models/FeePayment');
 const Invoice = require('../models/Invoice');
@@ -18,7 +17,6 @@ const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
 const { sendWelcomeEmail } = require('../utils/emailService');
 const { paginate, respondList } = require('../utils/paginate');
-const { issueCode } = require('../utils/sdms');
 const { studentScopeFilter, classScopeFilter, STAFF_ROLES } = require('../utils/access');
 
 const router = express.Router();
@@ -172,45 +170,66 @@ router.get('/academic-admin/students', authMiddleware, async (req, res) => {
 });
 
 // Enrolment is an academic admin responsibility. Teachers were previously
-// allowed here, which let any teacher create a student account (and an SDMS
-// code) for a class they taught, bypassing the enrolment and records process.
+// allowed here, which let any teacher create a student account for a class they
+// taught, bypassing the enrolment and records process.
 router.post('/academic-admin/students', authMiddleware, requireRole('academic_admin', 'headmaster'), async (req, res) => {
   try {
     const count = await Student.countDocuments();
     const studentId = `STU${new Date().getFullYear()}${String(count + 1).padStart(4, '0')}`;
+    const { password, ...studentFields } = req.body;
+    const email = studentFields.email || `${String(studentFields.fullName || '').replace(/\s/g, '').toLowerCase()}@student.essa.rw`;
+
+    if (await User.findOne({ email })) {
+      return res.status(400).json({ message: 'Email already exists' });
+    }
 
     // An unknown classId would otherwise store a dangling reference on the
     // student while the $addToSet below silently matched nothing, leaving a
     // student who belongs to nothing and never appears in a register.
-    if (req.body.classId) {
-      const classItem = await Class.findById(req.body.classId).select('_id');
+    if (studentFields.classId) {
+      const classItem = await Class.findById(studentFields.classId).select('_id');
       if (!classItem) {
         return res.status(400).json({ message: 'The selected class does not exist' });
       }
     }
 
-    const student = await Student.create({ ...req.body, studentId });
-    if (req.body.classId) {
-      await Class.findByIdAndUpdate(req.body.classId, { $addToSet: { students: student._id } });
+    const generated = !password;
+    const finalPassword = generated
+      ? crypto.randomBytes(9).toString('base64url').slice(0, 12) + '7'
+      : password;
+    const problems = generated
+      ? []
+      : passwordProblems(finalPassword, { email, fullName: studentFields.fullName });
+    if (problems.length) {
+      return res.status(400).json({ message: problems[0], problems });
     }
 
-    // Students authenticate with an SDMS code, not a shared default password,
-    // so the account is created with an unguessable placeholder that only the
-    // code can get past. mustChangePassword forces the modal on first login.
+    const hashedPassword = await bcrypt.hash(finalPassword, 10);
     const studentUser = await User.create({
-      fullName: req.body.fullName,
-      email: req.body.email || `${req.body.fullName.replace(/\s/g, '').toLowerCase()}@student.essa.rw`,
-      password: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10),
+      fullName: studentFields.fullName,
+      email,
+      password: hashedPassword,
       role: 'student',
-      phone: req.body.parentPhone,
-      mustChangePassword: true,
+      phone: studentFields.parentPhone,
+      mustChangePassword: generated,
+      passwordChangedAt: generated ? undefined : new Date(),
       createdBy: req.userId
     });
+    await rememberPassword(studentUser, hashedPassword);
+    await studentUser.save();
 
-    student.userId = studentUser._id;
-    const sdmsCode = await issueCode(student);
+    const student = await Student.create({
+      ...studentFields,
+      email,
+      userId: studentUser._id,
+      studentId
+    });
+    if (studentFields.classId) {
+      await Class.findByIdAndUpdate(studentFields.classId, { $addToSet: { students: student._id } });
+    }
 
-    res.json({ success: true, student, sdmsCode });
+    sendWelcomeEmail({ _id: studentUser._id, fullName: studentUser.fullName, email, role: 'student' }).catch(console.error);
+    res.json({ success: true, student, password: finalPassword, generated });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -227,76 +246,12 @@ router.delete('/academic-admin/students/:id', authMiddleware, requireRole('acade
     if (student.userId) await User.findByIdAndDelete(student.userId);
 
     await Grade.deleteMany({ studentId: student._id });
-    await Attendance.deleteMany({ studentId: student._id });
     await Discipline.deleteMany({ studentId: student._id });
     await FeePayment.deleteMany({ studentId: student._id });
     await Invoice.deleteMany({ studentId: student._id });
 
     await Student.findByIdAndDelete(req.params.id);
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// ==================== PERFORMANCE ====================
-router.get('/academic-admin/students-performance', authMiddleware, async (req, res) => {
-  try {
-    const scope = await studentScopeFilter(req.userId, req.userRole);
-    const students = await Student.find(scope).populate('classId', 'grade className');
-    // Only aggregate over the students actually returned, otherwise a teacher
-    // scoped to one class would still have every grade in the school loaded
-    // into the lookup map even though the rows are never rendered.
-    const ids = students.map(s => s._id);
-    const gradeAgg = ids.length
-      ? await Grade.aggregate([
-        { $match: { studentId: { $in: ids } } },
-        { $group: { _id: '$studentId', average: { $avg: '$score' }, count: { $sum: 1 } } }
-      ])
-      : [];
-    const scoreMap = new Map(gradeAgg.map(g => [String(g._id), g]));
-    const performanceData = students.map(s => {
-      const agg = scoreMap.get(String(s._id));
-      const average = agg ? Math.round(agg.average) : 0;
-      return {
-        studentId: s.studentId || `STU${s._id.toString().slice(-6)}`,
-        name: s.fullName,
-        class: s.classId ? `${s.classId.grade} ${s.classId.className}` : 'Not Assigned',
-        averageScore: average,
-        subjectsTracked: agg ? agg.count : 0,
-        grade: average >= 80 ? 'A' : average >= 70 ? 'B' : average >= 60 ? 'C' : average >= 50 ? 'D' : 'F'
-      };
-    }).sort((a, b) => b.averageScore - a.averageScore);
-    res.json(performanceData);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// School-wide academic averages per class. Staff only: previously any
-// signed-in account could read every class's performance.
-router.get('/academic-admin/class-performance', authMiddleware, requireRole(...STAFF_ROLES), async (req, res) => {
-  try {
-    const classes = await Class.find();
-    const students = await Student.find({ classId: { $in: classes.map(c => c._id) } });
-    const gradeAgg = await Grade.aggregate([
-      { $group: { _id: '$studentId', average: { $avg: '$score' } } }
-    ]);
-    const scoreMap = new Map(gradeAgg.map(g => [String(g._id), g.average]));
-    const performanceData = classes.map(cls => {
-      const classStudents = students.filter(s => String(s.classId) === String(cls._id));
-      const scores = classStudents
-        .map(s => scoreMap.get(String(s._id)))
-        .filter(avg => avg !== undefined);
-      const sum = scores.reduce((a, b) => a + b, 0);
-      return {
-        className: `${cls.grade} ${cls.className}`,
-        studentCount: classStudents.length,
-        assessedCount: scores.length,
-        averageScore: scores.length ? Math.round(sum / scores.length) : 0
-      };
-    });
-    res.json(performanceData);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

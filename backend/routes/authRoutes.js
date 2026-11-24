@@ -4,9 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 
 const User = require('../models/User');
-const Student = require('../models/Student');
 const { getJWTSecret } = require('../utils/jwt');
-const { normalizeCode, ensureUser, sessionToken } = require('../utils/sdms');
 const { authLimiter } = require('../config/rateLimit');
 const authMiddleware = require('../middleware/auth');
 const { passwordProblems } = require('../utils/passwordPolicy');
@@ -117,96 +115,8 @@ router.post('/auth/set-password',
     }
   });
 
-// Students sign in with the SDMS code printed on their access slip. On the
-// very first login there is no password yet, so a short-lived token is issued
-// that only unlocks the change-password endpoint.
-router.post('/auth/student/login', authLimiter,
-  body('sdmsCode').notEmpty().withMessage('SDMS code is required'),
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
-
-    try {
-      const sdmsCode = normalizeCode(req.body.sdmsCode);
-      const student = await Student.findOne({ sdmsCode });
-      if (!student) return res.status(401).json({ message: 'That SDMS code was not recognised' });
-      if (!student.isActive) return res.status(403).json({ message: 'This student account is inactive. Please contact the school.' });
-
-      const user = await ensureUser(student);
-      if (!user.isActive) return res.status(403).json({ message: 'This account is deactivated. Please contact the school.' });
-
-      const password = String(req.body.password || '');
-
-      // An account that has never had a password set is only ever given the
-      // short-lived "set your password" session, no matter what password was
-      // supplied alongside the code. The SDMS code is the credential here; there
-      // is no password yet to check, so accepting the supplied one would mean an
-      // arbitrary password quietly became valid.
-      if (!user.passwordChangedAt || !user.password) {
-        if (password) {
-          await recordAttempt(req, { user, identifier: sdmsCode, method: 'sdms', success: false, outcome: 'no_password_set' });
-        }
-        const token = sessionToken(user, true);
-        return res.json({
-          success: true,
-          mustSetPassword: true,
-          mustChangePassword: true,
-          _id: user._id,
-          fullName: user.fullName,
-          role: user.role,
-          token
-        });
-      }
-
-      if (isLocked(user)) {
-        await recordAttempt(req, { user, identifier: sdmsCode, method: 'sdms', success: false, outcome: 'locked' });
-        return res.status(423).json({
-          message: `Account temporarily locked after repeated failed sign-in attempts. Try again in ${lockRemainingMinutes(user)} minute(s).`
-        });
-      }
-
-      // A password-protected account requires the password. Omitting it is a
-      // failed attempt, not a shortcut to the pending session.
-      if (!password || !(await bcrypt.compare(password, user.password))) {
-        const updated = await registerFailure(user, 'bad_password');
-        await recordAttempt(req, { user, identifier: sdmsCode, method: 'sdms', success: false, outcome: 'bad_password' });
-        if (updated && updated.lockedUntil) {
-          return res.status(423).json({
-            message: `Account temporarily locked after repeated failed sign-in attempts. Try again in ${lockRemainingMinutes(updated)} minute(s).`
-          });
-        }
-        return res.status(401).json({ message: 'Incorrect SDMS code or password' });
-      }
-
-      const mustChangePassword = !!user.mustChangePassword;
-      const token = sessionToken(user, mustChangePassword);
-      await registerSuccess(user);
-      if (!student.firstLoginAt) {
-        student.firstLoginAt = new Date();
-        await student.save();
-      }
-
-      await recordAttempt(req, { user, identifier: sdmsCode, method: 'sdms', success: true, outcome: 'ok' });
-
-      res.json({
-        success: true,
-        mustSetPassword: false,
-        mustChangePassword,
-        _id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        role: user.role,
-        profileImage: user.profileImage,
-        token
-      });
-    } catch (error) {
-      res.status(500).json({ message: error.message });
-    }
-  });
-
-// Reached both from the first-login modal and from Profile Settings. When the
-// session still carries the pending flag, no current password is required,
-// because the student authenticated with the SDMS code instead.
+// Reached from the first-login modal and from Profile Settings. When the
+// session still carries the pending flag, no current password is required.
 // authMiddleware is required: without it req.userId is undefined, so the lookup
 // below 404s and nobody can ever clear a forced password change. It is on the
 // allow-list in auth.js precisely so the pending token still gets through.
@@ -249,7 +159,11 @@ router.post('/auth/change-password', authLimiter, authMiddleware, async (req, re
     await rememberPassword(user, hash);
     await user.save();
 
-    const token = sessionToken(user, false);
+    const token = jwt.sign(
+      { id: user._id, role: user.role, name: user.fullName, pwd: 0 },
+      getJWTSecret(),
+      { expiresIn: '7d' }
+    );
     res.json({ success: true, message: 'Password updated', mustChangePassword: false, token });
   } catch (error) {
     res.status(500).json({ message: error.message });

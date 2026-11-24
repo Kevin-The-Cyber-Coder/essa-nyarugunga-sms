@@ -3,7 +3,6 @@ const express = require('express');
 const Grade = require('../models/Grade');
 const Assignment = require('../models/Assignment');
 const Student = require('../models/Student');
-const Attendance = require('../models/Attendance');
 const Discipline = require('../models/Discipline');
 const Announcement = require('../models/Announcement');
 const { visibleToAudience } = require('../utils/announcementAudience');
@@ -68,9 +67,8 @@ router.get('/student/dashboard', authMiddleware, async (req, res) => {
     const student = await getOwnStudent(req.userId);
     const year = Number(req.query.year) || new Date().getFullYear();
 
-    const [grades, attendance, assignments, disciplineCount, announcements, fees] = await Promise.all([
+    const [grades, assignments, disciplineCount, announcements, fees] = await Promise.all([
       Grade.find({ studentId: student._id }),
-      Attendance.find({ studentId: student._id }),
       Assignment.find({ classId: student.classId }),
       Discipline.countDocuments({ studentId: student._id }),
       visibleAnnouncements(student),
@@ -80,8 +78,6 @@ router.get('/student/dashboard', authMiddleware, async (req, res) => {
     const averageScore = grades.length
       ? Math.round(grades.reduce((a, g) => a + (g.score || 0), 0) / grades.length)
       : 0;
-    const present = attendance.filter(a => a.status === 'present').length;
-    const attendanceRate = attendance.length ? Math.round((present / attendance.length) * 100) : 0;
     const now = Date.now();
     const mySubmissions = new Set(
       (await Assignment.find({ classId: student.classId }).select('submissions')).flatMap(a =>
@@ -102,8 +98,6 @@ router.get('/student/dashboard', authMiddleware, async (req, res) => {
       },
       averageScore,
       subjectsTracked: new Set(grades.map(g => g.subject).filter(Boolean)).size,
-      attendanceRate,
-      attendanceRecords: attendance.length,
       totalAssignments: assignments.length,
       pendingAssignments,
       disciplineCount,
@@ -120,22 +114,6 @@ router.get('/student/grades', authMiddleware, async (req, res) => {
     const student = await getOwnStudent(req.userId);
     const grades = await Grade.find({ studentId: student._id }).sort({ createdAt: -1 });
     res.json(grades);
-  } catch (error) {
-    res.status(error.status || 500).json({ message: error.message });
-  }
-});
-
-router.get('/student/attendance', authMiddleware, async (req, res) => {
-  try {
-    const student = await getOwnStudent(req.userId);
-    const query = { studentId: student._id };
-    if (req.query.startDate || req.query.endDate) {
-      query.date = {};
-      if (req.query.startDate) query.date.$gte = new Date(req.query.startDate);
-      if (req.query.endDate) query.date.$lte = new Date(req.query.endDate);
-    }
-    const attendance = await Attendance.find(query).sort({ date: -1 });
-    res.json(attendance);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.message });
   }
