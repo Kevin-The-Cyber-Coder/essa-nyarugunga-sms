@@ -1,20 +1,10 @@
 import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
-// Import images directly from assets folder
-import campusImage from '../assets/campus.png';
+// Only the image that is actually used on this page
 import studentsImage from '../assets/students.png';
-import classroomImg from '../assets/classroom.png';
-import libraryImg from '../assets/library.png';
-import footballImg from '../assets/football.png';
-import basketballImg from '../assets/basketball.png';
-import scienceLabImg from '../assets/science-lab.png';
-import musicImg from '../assets/music.png';
-import artImg from '../assets/art.png';
-import graduationImg from '../assets/graduation.png';
 
 const AcademicsPage = () => {
   useEffect(() => {
@@ -124,7 +114,6 @@ const AcademicsPage = () => {
     { name: 'E-Learning Platform', icon: 'fas fa-wifi', description: 'Access to online resources, digital assignments, and virtual classrooms.', detail: '24/7 Access' }
   ];
 
-  // Stats used in the hero stats cards
   const heroStats = [
     { number: '95%', label: 'Pass Rate', icon: 'fas fa-chart-line' },
     { number: '6+', label: 'Programs', icon: 'fas fa-layer-group' },
@@ -136,7 +125,7 @@ const AcademicsPage = () => {
     <>
       <Navbar />
 
-      {/* Hero Section - Solid Blue with Stats Cards cut in the middle at the bottom */}
+      {/* Hero */}
       <section className="academics-hero">
         <div className="container academics-hero-content">
           <div className="hero-badge">
@@ -144,8 +133,13 @@ const AcademicsPage = () => {
           </div>
           <h1>Academics at <span className="highlight">ESSA Nyarugunga</span></h1>
           <p>Excellence in Education | Diverse Programs | Holistic Development</p>
+        </div>
+      </section>
 
-          {/* Stats Cards - placed inside the hero but cut in the middle */}
+      {/* Stats cards: overlap the bottom of the hero using one shared offset,
+          so no per-breakpoint magic numbers are needed */}
+      <section className="stats-strip">
+        <div className="container">
           <div className="stats-cards">
             {heroStats.map((stat, index) => (
               <div key={index} className="stat-card">
@@ -158,7 +152,7 @@ const AcademicsPage = () => {
         </div>
       </section>
 
-      {/* Academic Overview - Left aligned */}
+      {/* Academic Overview */}
       <section className="academics-overview">
         <div className="container">
           <div className="overview-grid">
@@ -187,7 +181,7 @@ const AcademicsPage = () => {
               </div>
             </div>
             <div className="overview-image">
-              <img src={studentsImage} alt="Students in class" />
+              <img src={studentsImage} alt="Students in class" loading="lazy" />
             </div>
           </div>
         </div>
@@ -202,7 +196,7 @@ const AcademicsPage = () => {
             <p className="section-subtitle">Choose your path to success</p>
           </div>
 
-          {/* ---------- ORDINARY LEVEL SECTION ---------- */}
+          {/* ORDINARY LEVEL */}
           <div className="level-section">
             <div className="level-section-header">
               <div className="level-section-icon">
@@ -221,7 +215,7 @@ const AcademicsPage = () => {
                 <h4>Core Subjects</h4>
                 <ul>
                   {ordinaryCoreSubjects.map((subject, idx) => (
-                    <li key={idx}><i className="fas fa-check"></i> {subject}</li>
+                    <li key={idx}><span><i className="fas fa-check"></i> {subject}</span></li>
                   ))}
                 </ul>
               </div>
@@ -230,7 +224,7 @@ const AcademicsPage = () => {
                 <h4>Electives</h4>
                 <ul>
                   {ordinaryElectives.map((subject, idx) => (
-                    <li key={idx}><i className="fas fa-check"></i> {subject}</li>
+                    <li key={idx}><span><i className="fas fa-check"></i> {subject}</span></li>
                   ))}
                 </ul>
               </div>
@@ -240,7 +234,7 @@ const AcademicsPage = () => {
                 <ul>
                   {ordinaryAssessment.map((item, idx) => (
                     <li key={idx}>
-                      <i className="fas fa-check"></i> {item.label}
+                      <span><i className="fas fa-check"></i> {item.label}</span>
                       <span className="assessment-value">{item.value}</span>
                     </li>
                   ))}
@@ -249,7 +243,7 @@ const AcademicsPage = () => {
             </div>
           </div>
 
-          {/* ---------- ADVANCED LEVEL SECTION ---------- */}
+          {/* ADVANCED LEVEL */}
           <div className="level-section advanced-section">
             <div className="level-section-header">
               <div className="level-section-icon advanced-icon">
@@ -286,7 +280,7 @@ const AcademicsPage = () => {
                     <h4>Career Path:</h4>
                     <p>{combo.careerPath}</p>
                   </div>
-                  <button className="learn-more" onClick={() => handleLearnMore(combo.name)}>
+                  <button type="button" className="learn-more" onClick={() => handleLearnMore(combo.name)}>
                     Learn More <i className="fas fa-arrow-right"></i>
                   </button>
                 </div>
@@ -341,17 +335,45 @@ const AcademicsPage = () => {
 
       {/* Styles */}
       <style>{`
-        /* Hero Section - Solid Blue, Stats Cards Cut in Middle */
+        /* ---------- Shared container (fallback if no global .container) ---------- */
+        .academics-hero .container,
+        .stats-strip .container,
+        .academics-overview .container,
+        .academics-levels .container,
+        .academics-resources .container,
+        .academics-support .container {
+          width: 100%;
+          max-width: 1200px;
+          margin-left: auto;
+          margin-right: auto;
+          padding-left: clamp(1rem, 4vw, 2rem);
+          padding-right: clamp(1rem, 4vw, 2rem);
+          box-sizing: border-box;
+        }
+
+        .academics-hero *,
+        .stats-strip *,
+        .academics-overview *,
+        .academics-levels *,
+        .academics-resources *,
+        .academics-support * {
+          box-sizing: border-box;
+        }
+
+        /* One shared overlap value for the hero + stats strip */
+        .academics-hero,
+        .stats-strip {
+          --overlap: 4.5rem;
+        }
+
+        /* ---------- Hero ---------- */
         .academics-hero {
           position: relative;
           background: #1e3c72;
-          padding: 4rem 0 7rem;
-          overflow: visible;
+          padding: clamp(2.5rem, 6vw, 4rem) 0 calc(var(--overlap) + 2.5rem);
         }
 
         .academics-hero-content {
-          position: relative;
-          z-index: 2;
           text-align: center;
           color: white;
         }
@@ -360,9 +382,9 @@ const AcademicsPage = () => {
           display: inline-block;
           background: rgba(255,193,7,0.15);
           color: #ffc107;
-          padding: 7px 20px;
+          padding: 7px 18px;
           border-radius: 30px;
-          font-size: 0.8rem;
+          font-size: clamp(0.7rem, 2.5vw, 0.8rem);
           margin-bottom: 1rem;
           border: 1px solid rgba(255,193,7,0.3);
           letter-spacing: 1px;
@@ -375,18 +397,20 @@ const AcademicsPage = () => {
           to   { opacity: 1; transform: translateY(0); }
         }
 
-        .academics-hero-content h1 {
-          font-size: 2.5rem;
-          margin-bottom: 1rem;
-          font-weight: 800;
-          letter-spacing: -0.75px;
-          text-shadow: 0 2px 20px rgba(0, 0, 0, 0.25);
-          animation: fadeInUp 0.7s ease 0.1s both;
-        }
-
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .academics-hero-content h1 {
+          font-size: clamp(1.5rem, 5.5vw, 2.5rem);
+          line-height: 1.2;
+          margin: 0 0 1rem;
+          font-weight: 800;
+          letter-spacing: -0.5px;
+          text-shadow: 0 2px 20px rgba(0, 0, 0, 0.25);
+          overflow-wrap: anywhere;
+          animation: fadeInUp 0.7s ease 0.1s both;
         }
 
         .academics-hero-content .highlight {
@@ -394,31 +418,33 @@ const AcademicsPage = () => {
         }
 
         .academics-hero-content p {
-          font-size: 1.05rem;
+          font-size: clamp(0.88rem, 2.6vw, 1.05rem);
           opacity: 0.92;
-          margin-bottom: 1rem;
+          margin: 0 auto;
           max-width: 620px;
-          margin-left: auto;
-          margin-right: auto;
           line-height: 1.6;
           animation: fadeInUp 0.7s ease 0.2s both;
         }
 
-        /* Stats Cards - cut in the middle at the bottom of the hero */
+        /* ---------- Stats strip ---------- */
+        .stats-strip {
+          position: relative;
+          z-index: 5;
+          margin-top: calc(var(--overlap) * -1);
+          /* transparent over the hero, white below it */
+          background: linear-gradient(to bottom, transparent 0, transparent var(--overlap), #ffffff var(--overlap));
+        }
+
         .stats-cards {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 1.5rem;
-          margin-top: 4rem;
-          margin-bottom: -10.5rem;
-          position: relative;
-          z-index: 5;
+          gap: 1.25rem;
         }
 
         .stat-card {
           background: #ffffff;
           border-radius: 14px;
-          padding: 2rem 1rem;
+          padding: 1.75rem 1rem;
           text-align: center;
           box-shadow: 0 12px 32px rgba(10, 22, 40, 0.14);
           transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -430,14 +456,14 @@ const AcademicsPage = () => {
         }
 
         .stat-card i {
-          font-size: 2.2rem;
+          font-size: 2rem;
           color: #ffc107;
-          margin-bottom: 0.6rem;
+          margin-bottom: 0.5rem;
           display: inline-block;
         }
 
         .stat-card .stat-number {
-          font-size: 2.2rem;
+          font-size: 2rem;
           font-weight: 800;
           color: #ffc107;
           margin: 0.25rem 0;
@@ -445,26 +471,27 @@ const AcademicsPage = () => {
         }
 
         .stat-card .stat-label {
-          font-size: 0.9rem;
+          font-size: 0.88rem;
           color: #4a5568;
           font-weight: 500;
         }
 
-        /* Overview Section */
+        /* ---------- Overview ---------- */
         .academics-overview {
-          padding: 8rem 0 4rem;
+          padding: clamp(2rem, 5vw, 3.5rem) 0 clamp(2.5rem, 6vw, 4rem);
           background: white;
         }
 
         .overview-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 3rem;
+          gap: clamp(1.5rem, 4vw, 3rem);
           align-items: center;
         }
 
         .overview-content {
           text-align: left;
+          min-width: 0;
         }
 
         .section-badge {
@@ -479,8 +506,9 @@ const AcademicsPage = () => {
         }
 
         .overview-content h2 {
-          font-size: 2rem;
-          margin-bottom: 1rem;
+          font-size: clamp(1.4rem, 4.5vw, 2rem);
+          line-height: 1.25;
+          margin: 0 0 1rem;
           color: #1e3c72;
         }
 
@@ -490,27 +518,28 @@ const AcademicsPage = () => {
 
         .overview-content p {
           color: #555;
-          margin-bottom: 1rem;
-          line-height: 1.6;
+          margin: 0 0 1rem;
+          line-height: 1.7;
+          font-size: clamp(0.92rem, 2.4vw, 1rem);
         }
 
         .academic-stats {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 1rem;
+          gap: 0.75rem;
           margin-top: 1.5rem;
         }
 
         .stat-item {
           text-align: center;
           background: #f8f9fa;
-          padding: 1rem;
+          padding: 0.9rem 0.5rem;
           border-radius: 12px;
         }
 
         .stat-item .stat-number {
           display: block;
-          font-size: 1.5rem;
+          font-size: clamp(1.15rem, 3.5vw, 1.5rem);
           font-weight: 700;
           color: #1e3c72;
         }
@@ -520,26 +549,33 @@ const AcademicsPage = () => {
           color: #666;
         }
 
+        .overview-image {
+          min-width: 0;
+        }
+
         .overview-image img {
+          display: block;
           width: 100%;
+          height: auto;
           border-radius: 16px;
           box-shadow: 0 10px 30px rgba(0,0,0,0.1);
         }
 
-        /* Academic Levels Section */
+        /* ---------- Academic Levels ---------- */
         .academics-levels {
-          padding: 4rem 0;
+          padding: clamp(2.5rem, 6vw, 4rem) 0;
           background: #f8f9fa;
         }
 
         .section-title {
           text-align: center;
-          margin-bottom: 3rem;
+          margin-bottom: clamp(1.75rem, 5vw, 3rem);
         }
 
         .section-title h2 {
-          font-size: 2rem;
+          font-size: clamp(1.4rem, 4.5vw, 2rem);
           color: #1e3c72;
+          margin: 0;
         }
 
         .section-title h2 i {
@@ -557,14 +593,14 @@ const AcademicsPage = () => {
         .section-subtitle {
           color: #666;
           font-size: 0.9rem;
+          margin: 0;
         }
 
-        /* Level Section (each level has its own full section) */
         .level-section {
           background: #ffffff;
           border-radius: 20px;
-          padding: 2.5rem;
-          margin-bottom: 2.5rem;
+          padding: clamp(1.25rem, 4vw, 2.5rem);
+          margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
           box-shadow: 0 6px 24px rgba(30, 60, 114, 0.06);
           border: 1px solid #eef1f6;
         }
@@ -609,6 +645,7 @@ const AcademicsPage = () => {
 
         .level-section-heading {
           text-align: left;
+          min-width: 0;
         }
 
         .level-tag {
@@ -630,15 +667,16 @@ const AcademicsPage = () => {
         }
 
         .level-section-heading h3 {
-          font-size: 1.6rem;
+          font-size: clamp(1.15rem, 3.6vw, 1.6rem);
           color: #1e3c72;
-          margin-bottom: 0.35rem;
+          margin: 0 0 0.35rem;
           font-weight: 800;
         }
 
         .level-section-heading p {
           color: #64748b;
           font-size: 0.9rem;
+          line-height: 1.5;
           margin: 0;
         }
 
@@ -650,11 +688,12 @@ const AcademicsPage = () => {
 
         .level-card {
           background: #f8fafc;
-          padding: 1.75rem;
+          padding: clamp(1.15rem, 3vw, 1.75rem);
           border-radius: 16px;
           text-align: left;
           border: 1px solid #eef1f6;
           transition: transform 0.3s ease, box-shadow 0.3s ease;
+          min-width: 0;
         }
 
         .level-card:hover {
@@ -666,10 +705,11 @@ const AcademicsPage = () => {
           font-size: 2rem;
           color: #1e3c72;
           margin-bottom: 1rem;
+          display: inline-block;
         }
 
         .level-card h4 {
-          margin-bottom: 1rem;
+          margin: 0 0 1rem;
           color: #1e3c72;
           font-size: 1.1rem;
         }
@@ -682,28 +722,28 @@ const AcademicsPage = () => {
 
         .level-card ul li {
           margin: 0.55rem 0;
-          font-size: 0.87rem;
+          font-size: 0.9rem;
           color: #475569;
           display: flex;
-          align-items: center;
+          align-items: baseline;
           justify-content: space-between;
-          gap: 8px;
+          gap: 10px;
         }
 
         .level-card ul li i {
           font-size: 0.75rem;
           color: #ffc107;
           margin-right: 8px;
-          flex-shrink: 0;
         }
 
         .assessment-value {
           font-weight: 700;
           color: #1e3c72;
           font-size: 0.82rem;
+          white-space: nowrap;
         }
 
-        /* Combinations Grid */
+        /* ---------- Combinations ---------- */
         .advanced-intro {
           text-align: center;
           margin-bottom: 2rem;
@@ -722,17 +762,19 @@ const AcademicsPage = () => {
 
         .combinations-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+          /* min(100%, 300px) stops overflow on very narrow phones */
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
           gap: 1.5rem;
         }
 
         .combination-card {
           background: #ffffff;
           border-radius: 16px;
-          padding: 1.75rem;
+          padding: clamp(1.25rem, 3vw, 1.75rem);
           transition: transform 0.3s, box-shadow 0.3s;
           text-align: left;
           box-shadow: 0 4px 16px rgba(30, 60, 114, 0.06);
+          min-width: 0;
         }
 
         .combination-card:hover {
@@ -756,16 +798,17 @@ const AcademicsPage = () => {
         }
 
         .combination-card h3 {
-          margin-bottom: 0.3rem;
+          margin: 0 0 0.3rem;
           color: #1e3c72;
           font-size: 1.15rem;
+          overflow-wrap: anywhere;
         }
 
         .combination-subtitle {
           color: #d4a017;
           font-weight: 600;
           font-size: 0.8rem;
-          margin-bottom: 1rem;
+          margin: 0 0 1rem;
         }
 
         .subjects, .career-path {
@@ -775,7 +818,7 @@ const AcademicsPage = () => {
         .subjects h4, .career-path h4 {
           font-size: 0.85rem;
           color: #666;
-          margin-bottom: 0.5rem;
+          margin: 0 0 0.5rem;
         }
 
         .subjects ul {
@@ -784,20 +827,22 @@ const AcademicsPage = () => {
           gap: 0.5rem;
           list-style: none;
           padding: 0;
+          margin: 0;
         }
 
         .subjects ul li {
           background: #f0f2f5;
           padding: 0.3rem 0.8rem;
           border-radius: 20px;
-          font-size: 0.75rem;
+          font-size: 0.78rem;
           color: #475569;
         }
 
         .career-path p {
-          font-size: 0.85rem;
+          font-size: 0.88rem;
           color: #555;
           line-height: 1.5;
+          margin: 0;
         }
 
         .learn-more {
@@ -806,27 +851,30 @@ const AcademicsPage = () => {
           color: #d4a017;
           font-weight: 600;
           cursor: pointer;
-          margin-top: 1rem;
+          margin-top: 0.5rem;
           display: inline-flex;
           align-items: center;
-          gap: 5px;
-          padding: 0;
-          font-size: 0.88rem;
+          gap: 6px;
+          padding: 0.6rem 0;
+          min-height: 44px; /* comfortable touch target */
+          font-size: 0.9rem;
+          font-family: inherit;
         }
 
-        .learn-more:hover {
+        .learn-more:hover,
+        .learn-more:focus-visible {
           color: #1e3c72;
         }
 
-        /* Resources */
+        /* ---------- Resources ---------- */
         .academics-resources {
-          padding: 4rem 0;
+          padding: clamp(2.5rem, 6vw, 4rem) 0;
           background: #f8f9fa;
         }
 
         .resources-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
           gap: 1.5rem;
         }
 
@@ -850,25 +898,26 @@ const AcademicsPage = () => {
         }
 
         .resource-card h3 {
-          margin-bottom: 0.5rem;
+          margin: 0 0 0.5rem;
           color: #1e3c72;
         }
 
         .resource-card p {
-          font-size: 0.85rem;
+          font-size: 0.88rem;
           color: #666;
-          margin-bottom: 1rem;
+          line-height: 1.6;
+          margin: 0 0 1rem;
         }
 
         .resource-hours {
-          font-size: 0.75rem;
+          font-size: 0.78rem;
           color: #d4a017;
           font-weight: 600;
         }
 
-        /* Support */
+        /* ---------- Support ---------- */
         .academics-support {
-          padding: 4rem 0;
+          padding: clamp(2.5rem, 6vw, 4rem) 0;
           background: #1e3c72;
           color: white;
         }
@@ -887,79 +936,97 @@ const AcademicsPage = () => {
         }
 
         .support-content h3 {
-          margin-bottom: 0.5rem;
+          margin: 0 0 0.5rem;
+          font-size: clamp(1.15rem, 3.6vw, 1.4rem);
         }
 
         .support-content p {
           opacity: 0.9;
-          margin-bottom: 1rem;
+          line-height: 1.65;
+          margin: 0 0 1rem;
+          font-size: clamp(0.9rem, 2.4vw, 1rem);
         }
 
         .support-features {
           display: flex;
           flex-wrap: wrap;
-          gap: 0.8rem;
+          gap: 0.6rem;
         }
 
         .support-features span {
           background: rgba(255,255,255,0.15);
-          padding: 0.3rem 1rem;
+          padding: 0.4rem 1rem;
           border-radius: 30px;
-          font-size: 0.75rem;
+          font-size: 0.78rem;
         }
 
-        /* Responsive */
+        /* ---------- Responsive ---------- */
+
+        /* Tablet landscape / small laptop */
+        @media (max-width: 1024px) {
+          .level-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+          /* third card spans the full width so the grid has no orphan gap */
+          .level-grid .level-card:nth-child(3) {
+            grid-column: 1 / -1;
+          }
+        }
+
+        /* Tablet portrait */
         @media (max-width: 900px) {
+          .academics-hero,
+          .stats-strip {
+            --overlap: 3.5rem;
+          }
+
           .stats-cards {
             grid-template-columns: repeat(2, 1fr);
-            margin-bottom: -22rem;
-          }
-
-          .academics-overview {
-            padding-top: 14rem;
-          }
-
-          .level-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .academics-hero {
-            padding: 3rem 0 5rem;
-          }
-
-          .academics-hero-content h1 {
-            font-size: 1.6rem;
-          }
-
-          .academics-hero-content p {
-            font-size: 0.9rem;
+            gap: 1rem;
           }
 
           .overview-grid {
             grid-template-columns: 1fr;
           }
 
-          .level-grid {
-            grid-template-columns: 1fr;
+          .overview-image {
+            order: -1; /* image first, then text */
+          }
+        }
+
+        /* Phones */
+        @media (max-width: 768px) {
+          .academics-hero,
+          .stats-strip {
+            --overlap: 3rem;
+          }
+
+          .stat-card {
+            padding: 1.25rem 0.75rem;
+          }
+
+          .stat-card i {
+            font-size: 1.6rem;
+          }
+
+          .stat-card .stat-number {
+            font-size: 1.6rem;
+          }
+
+          .stat-card .stat-label {
+            font-size: 0.8rem;
           }
 
           .academic-stats {
             grid-template-columns: repeat(2, 1fr);
           }
 
-          .support-box {
-            flex-direction: column;
-            text-align: center;
-          }
-
-          .combinations-grid {
+          .level-grid {
             grid-template-columns: 1fr;
           }
 
-          .level-section {
-            padding: 1.75rem;
+          .level-grid .level-card:nth-child(3) {
+            grid-column: auto;
           }
 
           .level-section-header {
@@ -972,30 +1039,30 @@ const AcademicsPage = () => {
             text-align: center;
           }
 
-          .level-section-heading h3 {
-            font-size: 1.3rem;
+          .advanced-intro {
+            padding: 1rem;
+            text-align: left;
+          }
+
+          .support-box {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+          }
+
+          .support-features {
+            justify-content: center;
           }
         }
 
-        @media (max-width: 480px) {
-          .academics-hero-content h1 {
-            font-size: 1.35rem;
-          }
-
-          .academics-hero-content p {
-            font-size: 0.82rem;
-          }
-
+        /* Small phones */
+        @media (max-width: 400px) {
           .stats-cards {
-            margin-bottom: -30rem;
+            gap: 0.75rem;
           }
 
-          .academics-overview {
-            padding-top: 18rem;
-          }
-
-          .level-section {
-            padding: 1.25rem;
+          .stat-card {
+            padding: 1rem 0.5rem;
           }
 
           .level-section-icon {
@@ -1006,9 +1073,31 @@ const AcademicsPage = () => {
           .level-section-icon i {
             font-size: 1.35rem;
           }
+        }
 
-          .level-section-heading h3 {
-            font-size: 1.15rem;
+        /* Touch devices: no hover "jump" that sticks after a tap */
+        @media (hover: none) {
+          .stat-card:hover,
+          .level-card:hover,
+          .combination-card:hover,
+          .resource-card:hover {
+            transform: none;
+          }
+        }
+
+        /* Respect users who prefer less motion */
+        @media (prefers-reduced-motion: reduce) {
+          .hero-badge,
+          .academics-hero-content h1,
+          .academics-hero-content p {
+            animation: none;
+          }
+
+          .stat-card,
+          .level-card,
+          .combination-card,
+          .resource-card {
+            transition: none;
           }
         }
       `}</style>

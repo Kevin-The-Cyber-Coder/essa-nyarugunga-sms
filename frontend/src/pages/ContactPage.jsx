@@ -5,9 +5,6 @@ import { useForm } from '@formspree/react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
-// API Base URL (still used by the newsletter form)
-const API_URL = import.meta.env.VITE_API_URL;
-
 const ContactPage = () => {
   const [formData, setFormData] = useState({
     fullName: '',
@@ -128,36 +125,6 @@ const ContactPage = () => {
     });
   };
 
-  const handleNewsletterSubscribe = async (e) => {
-    e.preventDefault();
-    const email = e.target.email.value;
-    if (!email) return;
-
-    try {
-      const response = await fetch(`${API_URL}/api/subscriptions/subscribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
-      const data = await response.json();
-
-      Swal.fire({
-        title: data.success ? 'Subscribed!' : 'Already Subscribed',
-        text: data.message || 'You have successfully subscribed to our newsletter.',
-        icon: data.success ? 'success' : 'info',
-        confirmButtonColor: '#1e3c72'
-      });
-      e.target.reset();
-    } catch (error) {
-      Swal.fire({
-        title: 'Error',
-        text: 'Failed to subscribe. Please try again.',
-        icon: 'error',
-        confirmButtonColor: '#1e3c72'
-      });
-    }
-  };
-
   const contactInfo = [
     {
       id: 'visit',
@@ -250,7 +217,7 @@ const ContactPage = () => {
     { q: 'Is there an entrance examination?', a: 'Yes, entrance examinations are held weekly on Saturdays. Please contact the admissions office to schedule.' },
     { q: 'Do you offer scholarships?', a: 'Yes, we offer merit-based and need-based scholarships. Visit our Admissions page for more information.' },
     { q: 'What are the school hours?', a: 'School runs from 7:45 AM to 4:00 PM, Monday through Friday.' },
-    { q: 'How do I check my child\'s progress?', a: 'Parents can access the student portal using credentials provided by the school to track academic progress and attendance.' }
+    { q: 'How do I check my child\'s progress?', a: 'Parents can access the student portal using credentials provided by the school to view grades, fees and school notices.' }
   ];
 
   return (
@@ -522,27 +489,6 @@ const ContactPage = () => {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============ NEWSLETTER SECTION ============ */}
-      <section className="newsletter-section">
-        <div className="container">
-          <div className="newsletter-card">
-            <div className="newsletter-left">
-              <div className="newsletter-icon">
-                <i className="fas fa-envelope-open-text"></i>
-              </div>
-              <div>
-                <h3>Subscribe to Our Newsletter</h3>
-                <p>Get the latest news, events, and updates directly in your inbox.</p>
-              </div>
-            </div>
-            <form onSubmit={handleNewsletterSubscribe} className="newsletter-form">
-              <input type="email" name="email" placeholder="Your email address" required />
-              <button type="submit">Subscribe <i className="fas fa-paper-plane"></i></button>
-            </form>
           </div>
         </div>
       </section>
@@ -1285,98 +1231,6 @@ const ContactPage = () => {
           word-break: break-all;
         }
 
-        /* ============ NEWSLETTER SECTION ============ */
-        .newsletter-section {
-          padding: 4rem 0;
-          background: #1e3c72;
-        }
-
-        .newsletter-card {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 2rem;
-          max-width: 1000px;
-          margin: 0 auto;
-          flex-wrap: wrap;
-        }
-
-        .newsletter-left {
-          display: flex;
-          align-items: center;
-          gap: 1.25rem;
-          color: white;
-        }
-
-        .newsletter-icon {
-          flex-shrink: 0;
-          width: 60px;
-          height: 60px;
-          border-radius: 16px;
-          background: rgba(255, 193, 7, 0.15);
-          border: 1px solid rgba(255, 193, 7, 0.3);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .newsletter-icon i {
-          font-size: 1.5rem;
-          color: #ffc107;
-        }
-
-        .newsletter-left h3 {
-          margin: 0 0 4px;
-          font-size: 1.15rem;
-          font-weight: 800;
-        }
-
-        .newsletter-left p {
-          margin: 0;
-          opacity: 0.85;
-          font-size: 0.85rem;
-        }
-
-        .newsletter-form {
-          display: flex;
-          gap: 0.5rem;
-          flex: 1;
-          max-width: 420px;
-        }
-
-        .newsletter-form input {
-          flex: 1;
-          padding: 14px 20px;
-          border: none;
-          border-radius: 30px;
-          font-size: 0.9rem;
-          font-family: inherit;
-        }
-
-        .newsletter-form input:focus { outline: 2px solid #ffc107; }
-
-        .newsletter-form button {
-          background: #ffc107;
-          color: #1a3a5c;
-          border: none;
-          padding: 14px 26px;
-          border-radius: 30px;
-          cursor: pointer;
-          font-weight: 700;
-          font-family: inherit;
-          transition: all 0.3s ease;
-          white-space: nowrap;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .newsletter-form button:hover {
-          background: #e0a800;
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(255,193,7,0.4);
-        }
-
         /* ============ SOCIAL SECTION ============ */
         .social-section {
           padding: 4rem 0;
@@ -1712,11 +1566,6 @@ const ContactPage = () => {
           .form-row { grid-template-columns: 1fr; gap: 1rem; }
 
           .mini-info-grid { grid-template-columns: 1fr; }
-
-          .newsletter-card { flex-direction: column; text-align: center; }
-          .newsletter-left { flex-direction: column; text-align: center; }
-          .newsletter-form { flex-direction: column; max-width: 100%; width: 100%; }
-          .newsletter-form button { justify-content: center; }
 
           .social-grid { grid-template-columns: repeat(2, 1fr); }
 

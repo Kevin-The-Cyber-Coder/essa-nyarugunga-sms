@@ -85,36 +85,6 @@ const NewsPage = () => {
     document.body.style.overflow = 'auto';
   };
 
-  const handleSubscribe = async (e) => {
-    e.preventDefault();
-    const email = e.target.email.value;
-    if (email) {
-      try {
-        const response = await fetch(`${API_URL}/api/subscriptions/subscribe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
-        });
-        const data = await response.json();
-
-        Swal.fire({
-          title: data.success ? 'Subscribed!' : 'Already Subscribed',
-          text: data.message || 'You have successfully subscribed to our newsletter.',
-          icon: data.success ? 'success' : 'info',
-          confirmButtonColor: '#1a3a5c'
-        });
-        e.target.reset();
-      } catch (error) {
-        Swal.fire({
-          title: 'Error',
-          text: 'Failed to subscribe. Please try again.',
-          icon: 'error',
-          confirmButtonColor: '#1a3a5c'
-        });
-      }
-    }
-  };
-
   const handleShare = (news) => {
     Swal.fire({
       title: 'Share Article',
@@ -212,25 +182,6 @@ const NewsPage = () => {
               <span className="stat-number">{newsItems.reduce((sum, item) => sum + (item.views || 0), 0)}</span>
               <span className="stat-label">Total Views</span>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Newsletter Subscribe Bar */}
-      <section className="newsletter-bar">
-        <div className="container">
-          <div className="newsletter-wrapper">
-            <div className="newsletter-text">
-              <i className="fas fa-envelope"></i>
-              <div>
-                <h3>Subscribe to Newsletter</h3>
-                <p>Get the latest news directly in your inbox</p>
-              </div>
-            </div>
-            <form onSubmit={handleSubscribe} className="newsletter-form-inline">
-              <input type="email" name="email" placeholder="Your email address" required />
-              <button type="submit">Subscribe <i className="fas fa-paper-plane"></i></button>
-            </form>
           </div>
         </div>
       </section>
@@ -626,61 +577,6 @@ const NewsPage = () => {
           opacity: 0.85;
           letter-spacing: 0.5px;
           text-transform: uppercase;
-        }
-
-        /* Newsletter Bar */
-        .newsletter-bar {
-          background: #1a3a5c;
-          padding: 1.5rem 0;
-        }
-        .newsletter-wrapper {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 1rem;
-        }
-        .newsletter-text {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          color: white;
-        }
-        .newsletter-text i {
-          font-size: 2rem;
-          color: #ffc107;
-        }
-        .newsletter-text h3 {
-          margin: 0;
-          font-size: 1.1rem;
-        }
-        .newsletter-text p {
-          margin: 0;
-          font-size: 0.8rem;
-          opacity: 0.8;
-        }
-        .newsletter-form-inline {
-          display: flex;
-          gap: 0.5rem;
-        }
-        .newsletter-form-inline input {
-          padding: 10px 15px;
-          border: none;
-          border-radius: 30px;
-          width: 250px;
-        }
-        .newsletter-form-inline button {
-          background: #ffc107;
-          color: #1a3a5c;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 30px;
-          cursor: pointer;
-          font-weight: 600;
-          transition: 0.3s;
-        }
-        .newsletter-form-inline button:hover {
-          transform: translateY(-2px);
         }
 
         /* Search and Filter */
@@ -1161,17 +1057,6 @@ const NewsPage = () => {
           }
           .news-card.list-view {
             grid-template-columns: 1fr;
-          }
-          .newsletter-wrapper {
-            flex-direction: column;
-            text-align: center;
-          }
-          .newsletter-form-inline {
-            flex-direction: column;
-            width: 100%;
-          }
-          .newsletter-form-inline input {
-            width: 100%;
           }
           .search-filter-container {
             flex-direction: column;

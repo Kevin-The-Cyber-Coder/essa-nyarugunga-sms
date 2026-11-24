@@ -1,34 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import Swal from 'sweetalert2';
 
 const Footer = () => {
-  const [email, setEmail] = useState('');
-
-  const handleNewsletterSubmit = (e) => {
-    e.preventDefault();
-    if (email) {
-      Swal.fire({
-        title: 'Subscribed!',
-        text: `Thank you — updates will be sent to ${email}.`,
-        icon: 'success',
-        confirmButtonColor: '#1e3c72',
-        confirmButtonText: 'Great',
-        timer: 3000,
-        timerProgressBar: true,
-      });
-      setEmail('');
-    } else {
-      Swal.fire({
-        title: 'Email Required',
-        text: 'Please enter a valid email address to subscribe.',
-        icon: 'warning',
-        confirmButtonColor: '#1e3c72',
-        confirmButtonText: 'OK',
-      });
-    }
-  };
-
   return (
     <footer className="footer">
       <div className="footer-inner">
@@ -60,6 +33,11 @@ const Footer = () => {
               <i className="fab fa-youtube" aria-hidden="true" />
             </a>
           </div>
+
+          <Link to="/portal/login" className="footer-portal-link">
+            <i className="fas fa-sign-in-alt" aria-hidden="true" />
+            Portal Login
+          </Link>
         </div>
 
         {/* ── Quick links ────────────────── */}
@@ -97,32 +75,6 @@ const Footer = () => {
           </ul>
         </div>
 
-        {/* ── Newsletter ─────────────────── */}
-        <div className="footer-col">
-          <h4>Stay Updated</h4>
-          <p className="newsletter-text">
-            Get school news, events, and announcements delivered to your inbox.
-          </p>
-          <form className="newsletter-form" onSubmit={handleNewsletterSubmit}>
-            <div className="input-group">
-              <input
-                type="email"
-                placeholder="Your email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                aria-label="Email address"
-              />
-              <button type="submit" aria-label="Subscribe">
-                <i className="fas fa-paper-plane" aria-hidden="true" />
-              </button>
-            </div>
-          </form>
-          <Link to="/portal/login" className="footer-portal-link">
-            <i className="fas fa-sign-in-alt" aria-hidden="true" />
-            Portal Login
-          </Link>
-        </div>
       </div>
 
       {/* ── Bottom bar ─────────────────── */}
@@ -151,7 +103,7 @@ const Footer = () => {
           max-width: 1200px;
           margin: 0 auto;
           display: grid;
-          grid-template-columns: 1.4fr 0.9fr 1.1fr 1.2fr;
+          grid-template-columns: 1.4fr 0.9fr 1.1fr;
           gap: 2.5rem;
           padding-bottom: 2.25rem;
           border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -297,57 +249,8 @@ const Footer = () => {
           color: #ffc107;
         }
 
-        /* Newsletter */
-        .newsletter-text {
-          font-size: 0.82rem;
-          color: rgba(255, 255, 255, 0.7);
-          line-height: 1.55;
-          margin: 0 0 0.9rem;
-        }
-
-        .newsletter-form { margin-bottom: 0.9rem; }
-
-        .input-group {
-          display: flex;
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 12px;
-          overflow: hidden;
-          transition: border-color 0.2s ease, background 0.2s ease;
-        }
-        .input-group:focus-within {
-          border-color: #ffc107;
-          background: rgba(255, 255, 255, 0.09);
-        }
-        .input-group input {
-          flex: 1;
-          padding: 10px 14px;
-          background: transparent;
-          border: none;
-          color: #ffffff;
-          font-size: 0.85rem;
-          outline: none;
-          font-family: inherit;
-          min-width: 0;
-        }
-        .input-group input::placeholder {
-          color: rgba(255, 255, 255, 0.45);
-        }
-        .input-group button {
-          padding: 0 16px;
-          background: #ffc107;
-          border: none;
-          color: #1a3a5c;
-          cursor: pointer;
-          font-size: 0.9rem;
-          transition: all 0.2s ease;
-          flex-shrink: 0;
-        }
-        .input-group button:hover {
-          background: #e0a800;
-        }
-
         .footer-portal-link {
+          margin-top: 1rem;
           display: inline-flex;
           align-items: center;
           gap: 8px;
