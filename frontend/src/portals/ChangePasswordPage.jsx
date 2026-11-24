@@ -1,9 +1,10 @@
+import { API_URL } from '../config/api';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { ROLE_ROUTES, normalizeRole } from '../config/roles';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 
 const strengthOf = (password) => {
   let score = 0;

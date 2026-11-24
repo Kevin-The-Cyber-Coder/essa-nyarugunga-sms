@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect, useCallback, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -8,7 +9,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import PreferencesPanel from '../components/PreferencesPanel';
 import ClassResourcesPanel from '../components/resources/ClassResourcesPanel';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 const getToken = () => localStorage.getItem('portalToken');
 const authHeaders = () => ({
   'Content-Type': 'application/json',

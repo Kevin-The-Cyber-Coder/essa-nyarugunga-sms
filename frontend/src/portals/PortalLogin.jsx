@@ -1,8 +1,9 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ROLE_ROUTES, normalizeRole } from '../config/roles';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 
 const BG =
   'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1600&q=80';

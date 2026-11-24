@@ -1,6 +1,7 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect, useCallback } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 const authHeaders = () => ({
   'Content-Type': 'application/json',
   Authorization: `Bearer ${localStorage.getItem('portalToken')}`

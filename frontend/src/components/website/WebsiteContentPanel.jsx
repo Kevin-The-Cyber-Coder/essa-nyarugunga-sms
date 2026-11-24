@@ -1,8 +1,9 @@
+import { API_URL } from '../../config/api';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Swal from 'sweetalert2';
 import { canManageCategory, PERMISSIONS } from '../../config/roles';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 const token = () => localStorage.getItem('portalToken');
 
 const CATEGORIES = [

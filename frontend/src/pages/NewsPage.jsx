@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -5,7 +6,7 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 
 // API Base URL
-const API_URL = import.meta.env.VITE_API_URL;
+
 
 const NewsPage = () => {
   const [activeCategory, setActiveCategory] = useState('all');

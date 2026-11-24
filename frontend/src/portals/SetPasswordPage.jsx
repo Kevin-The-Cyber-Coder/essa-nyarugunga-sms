@@ -1,9 +1,10 @@
+import { API_URL } from '../config/api';
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import campusBg from '../assets/campus.png';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 
 const SetPasswordPage = () => {
   const [searchParams] = useSearchParams();

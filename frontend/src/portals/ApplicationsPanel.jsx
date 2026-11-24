@@ -1,10 +1,11 @@
+import { API_URL } from '../config/api';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { openPrintableDocument } from '../utils/printDocument';
 import { ROLES, normalizeRole } from '../config/roles';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 const getToken = () => localStorage.getItem('portalToken');
 const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 

@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import Navbar from '../components/Navbar';
@@ -5,7 +6,7 @@ import Footer from '../components/Footer';
 import { Link } from 'react-router-dom';
 
 // API Base URL
-const API_URL = import.meta.env.VITE_API_URL;
+
 
 const GalleryPage = () => {
   const [activeFilter, setActiveFilter] = useState('all');

@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -20,7 +21,7 @@ import musicClubImg from '../assets/music-club.png';
 import sportsClubImg from '../assets/sports-club.png';
 
 // API Base URL
-const API_URL = import.meta.env.VITE_API_URL;
+
 
 const AdmissionsPage = () => {
   const [activeFaq, setActiveFaq] = useState(null);

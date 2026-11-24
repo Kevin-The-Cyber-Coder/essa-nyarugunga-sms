@@ -1,3 +1,4 @@
+import { API_URL } from '../config/api';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -8,7 +9,7 @@ import ApplicationsPanel from './ApplicationsPanel';
 import WebsiteContentPanel from '../components/website/WebsiteContentPanel';
 import { ROLES } from '../config/roles';
 
-const API_URL = import.meta.env.VITE_API_URL;
+
 const getToken = () => localStorage.getItem('portalToken');
 const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` });
 
