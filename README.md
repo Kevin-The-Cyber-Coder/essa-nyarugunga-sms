@@ -262,6 +262,7 @@ The current local verification also confirms that signing in as `admin@essa.rw /
 
 ## Notes for maintainers
 
+- Render deploys need `app.set('trust proxy', 1)` so rate limiting reads forwarded client IPs instead of the proxy address.
 - Keep `backend/config/roles.js` and `frontend/src/config/roles.js` aligned. The backend map is authoritative for access control.
 - Preserve `ROLE_ALIASES = Object.freeze({ super_admin: ROLES.HEADMASTER })` for stored legacy records.
 - Admission status transitions belong in `backend/routes/admissionsAdminRoutes.js`; do not allow clients to set `registered` directly.

@@ -29,6 +29,10 @@ if (!process.env.JWT_SECRET) {
 const app = express();
 const server = http.createServer(app);
 
+// Render terminates requests at one proxy hop. Without this, Express ignores
+// X-Forwarded-For and express-rate-limit treats every visitor as the proxy IP.
+app.set('trust proxy', 1);
+
 const PRODUCTION_FRONTEND_URL = 'https://essa-nyarugunga-school-complex-syst-eta.vercel.app';
 const LOCAL_FRONTEND_URLS = [
   'http://localhost:5173',
