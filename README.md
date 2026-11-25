@@ -101,7 +101,7 @@ There is no standalone CMS route. The shared content editor is embedded only in 
 
 **Frontend:** React 19, Vite 8, React Router, Axios, SweetAlert2  
 **Backend:** Node.js, Express, MongoDB/Mongoose, JWT, Nodemailer, Multer  
-**Delivery:** In-app notifications + Resend email; local uploads served from `/uploads`
+**Delivery:** In-app notifications + Resend email; Cloudinary uploads with local-disk fallback
 
 ---
 
@@ -127,6 +127,13 @@ Recommended dashboard variables:
 | Render | `RESEND_API_KEY` | Resend API key with send permission |
 | Render | `EMAIL_FROM` | Verified Resend sender, e.g. `ESSA Nyarugunga <no-reply@your-domain>` |
 | Render | `ADMIN_EMAIL` | Recipient for contact-form notifications |
+| Render | `STORAGE_PROVIDER` | `cloudinary` |
+| Render | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
+| Render | `CLOUDINARY_API_KEY` | Cloudinary API key |
+| Render | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+| Render | `MAX_UPLOAD_BYTES` | Optional upload size limit, default `10485760` |
+
+News/gallery images, profile photos, assignment files, student submissions and class resources all use this shared upload adapter. With the Cloudinary variables set, stored URLs are `res.cloudinary.com` URLs instead of ephemeral local `/uploads` paths.
 
 Both `vercel.json` files include the SPA rewrite so direct links such as `/portal/headmaster` and `/set-password` serve `index.html` instead of a 404. If your Vercel project uses `frontend` as its Root Directory, `frontend/vercel.json` is used; otherwise the root `vercel.json` builds and serves `frontend/dist`.
 
