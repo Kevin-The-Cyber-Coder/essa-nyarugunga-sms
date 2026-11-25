@@ -4,7 +4,7 @@ const News = require('../models/News');
 const Gallery = require('../models/Gallery');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
-const { uploadNews, uploadGallery } = require('../config/upload');
+const { uploadNews, uploadGallery, storeUploadedFile } = require('../config/upload');
 const {
   CONTENT_TYPES, contentCategory, isContentManager, canManage,
   lifecycle, publicVisibility
@@ -21,9 +21,12 @@ const requireManager = (req, res, next) => {
 
 const uploadFor = (type) => (type === CONTENT_TYPES.gallery ? uploadGallery : uploadNews).single('image');
 
-const imageUrl = (req, folder) => req.file
-  ? `${req.protocol}://${req.get('host')}/uploads/${folder}/${req.file.filename}`
-  : null;
+const storeImage = async (req, folder) => {
+  if (!req.file) return null;
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const saved = await storeUploadedFile(req.file, folder, baseUrl);
+  return saved.url;
+};
 
 const buildFields = (type, body, role, fileUrl) => {
   const life = lifecycle(body);
@@ -67,7 +70,8 @@ router.post('/content/:type', authMiddleware, requireManager, (req, res, next) =
     if (!canManage(req.userRole, category)) return res.status(403).json({ message: 'You cannot manage this category' });
 
     const folder = type === CONTENT_TYPES.gallery ? 'gallery' : 'news';
-    const fields = buildFields(type, req.body, req.userRole, imageUrl(req, folder));
+    const fileUrl = await storeImage(req, folder);
+    const fields = buildFields(type, req.body, req.userRole, fileUrl);
     if (type === CONTENT_TYPES.gallery && !fields.image) return res.status(400).json({ message: 'Image is required' });
 
     const user = await User.findById(req.userId).select('fullName');
@@ -94,7 +98,8 @@ router.put('/content/:type/:id', authMiddleware, requireManager, (req, res, next
     }
 
     const folder = type === CONTENT_TYPES.gallery ? 'gallery' : 'news';
-    const fields = buildFields(type, { ...existing.toObject(), ...req.body }, req.userRole, imageUrl(req, folder));
+    const fileUrl = await storeImage(req, folder);
+    const fields = buildFields(type, { ...existing.toObject(), ...req.body }, req.userRole, fileUrl);
     const updated = await Model.findByIdAndUpdate(req.params.id, { ...fields, updatedAt: new Date() }, { new: true });
     res.json({ success: true, item: updated });
   } catch (error) {

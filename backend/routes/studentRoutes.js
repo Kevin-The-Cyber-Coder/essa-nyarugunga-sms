@@ -11,7 +11,7 @@ const FeePayment = require('../models/FeePayment');
 const Invoice = require('../models/Invoice');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
-const { uploadSubmission } = require('../config/upload');
+const { uploadSubmission, storeUploadedFile } = require('../config/upload');
 
 const router = express.Router();
 
@@ -181,7 +181,9 @@ router.post('/student/assignments/:id/submit', authMiddleware, uploadSubmission.
       return res.status(403).json({ message: 'This assignment is not for your class' });
     }
 
-    const fileUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/submissions/${req.file.filename}` : null;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const stored = await storeUploadedFile(req.file, 'submissions', baseUrl);
+    const fileUrl = stored?.url || null;
     const isLate = assignment.dueDate && new Date(assignment.dueDate) < new Date();
     const status = isLate ? 'late' : 'submitted';
 

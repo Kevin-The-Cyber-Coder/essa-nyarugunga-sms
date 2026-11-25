@@ -9,7 +9,7 @@ const Grade = require('../models/Grade');
 const Exam = require('../models/Exam');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
-const { uploadAssignment } = require('../config/upload');
+const { uploadAssignment, storeUploadedFile } = require('../config/upload');
 const { authorizeStudentAccess, teacherOwnsClass } = require('../utils/access');
 const { buildWeightIndex, averageFor, letterFor } = require('../utils/grading');
 const { notifyClass } = require('../utils/classNotify');
@@ -111,7 +111,9 @@ router.get('/teacher/assignments', authMiddleware, requireRole('teacher', 'acade
 
 router.post('/teacher/assignments', authMiddleware, requireRole('teacher', 'academic_admin', 'headmaster'), uploadAssignment.single('file'), async (req, res) => {
   try {
-    const fileUrl = req.file ? `${req.protocol}://${req.get('host')}/uploads/assignments/${req.file.filename}` : null;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const stored = await storeUploadedFile(req.file, 'assignments', baseUrl);
+    const fileUrl = stored?.url || null;
 
     const assignment = await Assignment.create({
       title: req.body.title,

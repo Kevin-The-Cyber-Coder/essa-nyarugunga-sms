@@ -1,18 +1,15 @@
 const multer = require('multer');
-const fs = require('fs');
 const path = require('path');
+const { uploadBuffer } = require('../utils/storage');
 
-const uploadDirs = ['./uploads', './uploads/news', './uploads/gallery', './uploads/profile', './uploads/assignments', './uploads/submissions'];
-uploadDirs.forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-});
-
-const makeStorage = (folder, prefix) => multer.diskStorage({
-  destination: (req, file, cb) => cb(null, `uploads/${folder}/`),
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `${prefix}-${unique}${path.extname(file.originalname)}`);
-  }
+// Multer keeps the file in memory only. The shared storage adapter then writes
+// it to the configured provider (Cloudinary in production, local disk in dev),
+// so uploaded images survive Render restarts instead of living in its ephemeral
+// filesystem.
+const memoryUpload = ({ fileFilter, limits }) => multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits
 });
 
 const imageFileFilter = (req, file, cb) => {
@@ -34,18 +31,49 @@ const documentFileFilter = (req, file, cb) => {
   }
 };
 
-const uploadNews    = multer({ storage: makeStorage('news',    'news'),    fileFilter: imageFileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
-const uploadGallery = multer({ storage: makeStorage('gallery', 'gallery'), fileFilter: imageFileFilter, limits: { fileSize: 5 * 1024 * 1024 } });
-const uploadProfile = multer({ storage: makeStorage('profile', 'profile'), fileFilter: imageFileFilter, limits: { fileSize: 2 * 1024 * 1024 } });
-const uploadAssignment = multer({
-  storage: makeStorage('assignments', 'assignment'),
-  limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: documentFileFilter
-});
-const uploadSubmission = multer({
-  storage: makeStorage('submissions', 'submission'),
-  limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: documentFileFilter
+const uploadNews = memoryUpload({
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-module.exports = { uploadNews, uploadGallery, uploadProfile, uploadAssignment, uploadSubmission };
+const uploadGallery = memoryUpload({
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+const uploadProfile = memoryUpload({
+  fileFilter: imageFileFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }
+});
+
+const uploadAssignment = memoryUpload({
+  fileFilter: documentFileFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+
+const uploadSubmission = memoryUpload({
+  fileFilter: documentFileFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+
+// Returns the stored URL alongside the provider key in case a caller later
+// needs to remove the asset from Cloudinary.
+const storeUploadedFile = async (file, folder, baseUrl) => {
+  if (!file) return null;
+  return uploadBuffer({
+    buffer: file.buffer,
+    filename: file.originalname,
+    mime: file.mimetype,
+    folder,
+    baseUrl
+  });
+};
+
+module.exports = {
+  uploadNews,
+  uploadGallery,
+  uploadProfile,
+  uploadAssignment,
+  uploadSubmission,
+  storeUploadedFile
+};

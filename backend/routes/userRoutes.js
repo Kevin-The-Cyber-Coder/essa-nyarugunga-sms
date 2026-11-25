@@ -6,16 +6,17 @@ const authMiddleware = require('../middleware/auth');
 const { authLimiter } = require('../config/rateLimit');
 const { passwordProblems, SAFE_USER_SELECT } = require('../utils/passwordPolicy');
 const { rememberPassword, passwordWasUsedBefore } = require('../utils/loginSecurity');
-const { uploadProfile } = require('../config/upload');
+const { uploadProfile, storeUploadedFile } = require('../config/upload');
 
 const router = express.Router();
 
 router.post('/user/upload-profile', authMiddleware, uploadProfile.single('profileImage'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/profile/${req.file.filename}`;
-    await User.findByIdAndUpdate(req.userId, { profileImage: imageUrl });
-    res.json({ success: true, imageUrl });
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const saved = await storeUploadedFile(req.file, 'profile', baseUrl);
+    await User.findByIdAndUpdate(req.userId, { profileImage: saved.url });
+    res.json({ success: true, imageUrl: saved.url });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
