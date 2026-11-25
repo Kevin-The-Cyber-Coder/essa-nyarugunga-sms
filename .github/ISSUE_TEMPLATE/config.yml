@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Live application
+    url: https://essa-nyarugunga-school-complex-syst-eta.vercel.app/
+    about: Open the production website and role portals.
+  - name: Security report
+    url: https://github.com/Kevin-The-Cyber-Coder/essa-nyarugunga-sms/security/advisories/new
+    about: Report a vulnerability privately. Do not open a public issue.

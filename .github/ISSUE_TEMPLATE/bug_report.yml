@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible problem with the website, portal or API.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Please remove passwords, tokens and personal student data before submitting.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed behaviour and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Sign in as ...
+        3. Click ...
+        4. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, device and whether this was on the live site or local development.
+      placeholder: "Chrome on Windows 11, live Vercel site"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or screenshots
+      description: Paste sanitized errors or attach screenshots. Do not include secrets.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed passwords, tokens and private student data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
