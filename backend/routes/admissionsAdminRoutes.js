@@ -432,7 +432,7 @@ router.post('/applications/:id/register', authMiddleware, requireRole(ROLES.ADMI
     res.json({
       success: true,
       student,
-      password: generatedPassword,
+      password: inviteSent ? undefined : generatedPassword,
       generated: true,
       applicationNumber: application.applicationNumber,
       inviteSent

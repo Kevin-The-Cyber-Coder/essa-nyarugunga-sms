@@ -68,7 +68,13 @@ router.post('/academic-admin/create-teacher-credentials', authMiddleware, requir
     } catch (error) {
       console.error(`Teacher invitation failed for ${email}: ${error.message}`);
     }
-    res.json({ success: true, teacher: teacherProfile, password: finalPassword, generated, inviteSent });
+    res.json({
+      success: true,
+      teacher: teacherProfile,
+      password: inviteSent ? undefined : finalPassword,
+      generated,
+      inviteSent
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -247,7 +253,13 @@ router.post('/academic-admin/students', authMiddleware, requireRole('academic_ad
     } catch (error) {
       console.error(`Student invitation failed for ${email}: ${error.message}`);
     }
-    res.json({ success: true, student, password: finalPassword, generated, inviteSent });
+    res.json({
+      success: true,
+      student,
+      password: inviteSent ? undefined : finalPassword,
+      generated,
+      inviteSent
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -76,7 +76,9 @@ router.post('/headmaster/create-admin', authMiddleware, requireRole(ROLES.HEADMA
     res.json({
       success: true,
       user: { _id: newAdmin._id, fullName, email, role },
-      password: finalPassword,
+      // Only expose the temporary password when email could not deliver the
+      // invitation. If the link was sent, the browser has no reason to hold it.
+      password: inviteSent ? undefined : finalPassword,
       generated,
       inviteSent
     });
