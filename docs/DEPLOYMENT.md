@@ -197,6 +197,8 @@ Or check the notification preferences response for:
 { "providers": { "email": true } }
 ```
 
+`"email": true` in `/api/health` only means the variables are present. It does not prove Resend accepts the sender. If an invitation fails, the admin dialog now shows Resend's exact error. The most common cause is using `onboarding@resend.dev` as `EMAIL_FROM`: that shared sender can only deliver to the email address that owns the Resend account. Verify your own domain at <https://resend.com/domains> and set `EMAIL_FROM` to an address on that verified domain before inviting other staff.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -206,6 +208,9 @@ Or check the notification preferences response for:
 | Login works in Postman but not the browser | Confirm the frontend bundle calls `https://essa-api.onrender.com` |
 | `429 Too Many Requests` | Rate limits can be raised with `RATE_LIMIT_*` variables |
 | `providers.email` is false | `RESEND_API_KEY` and `EMAIL_FROM` are missing or empty |
+| `You can only send testing emails to your own email address` | Verify a domain in Resend and change `EMAIL_FROM` away from `onboarding@resend.dev` |
+| `domain is not verified` / `Not authorized to send emails from ...` | The exact domain in `EMAIL_FROM` must be verified in Resend |
+| `API key is invalid` | Replace `RESEND_API_KEY` with an active key from Resend |
 | Uploads return local URLs | `STORAGE_PROVIDER` or Cloudinary credentials are not configured |
 | Direct portal link returns 404 | Confirm the Vercel SPA rewrite is being used |
 | Rate-limit proxy warning | The backend must keep `app.set('trust proxy', 1)` on Render |
