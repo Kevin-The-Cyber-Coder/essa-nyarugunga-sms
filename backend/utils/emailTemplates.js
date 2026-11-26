@@ -233,11 +233,13 @@ const accountInvitation = ({
     ? 'Reminder: activate your ESSA Nyarugunga account'
     : 'Activate your ESSA Nyarugunga account';
   const heading = reminder ? 'Your invitation is still waiting' : 'Welcome to ESSA Nyarugunga';
+  // "an Academic Administrator" reads correctly; "a Academic" does not.
+  const roleWithArticle = `${/^[aeiou]/i.test(roleLabel) ? 'an' : 'a'} ${roleLabel}`;
   const intro = reminder
     ? `This is a reminder that your ${roleLabel} account has not been activated yet. Use the button below to choose your password.`
     : inviterName
-      ? `${inviterName} has created a ${roleLabel} account for you on the ESSA Nyarugunga School Management System.`
-      : `A ${roleLabel} account has been created for you on the ESSA Nyarugunga School Management System.`;
+      ? `${inviterName} has created an account for you as ${roleWithArticle} on the ESSA Nyarugunga School Management System.`
+      : `An account has been created for you as ${roleWithArticle} on the ESSA Nyarugunga School Management System.`;
 
   const content = [
     paragraph(`Hello ${name},`),
