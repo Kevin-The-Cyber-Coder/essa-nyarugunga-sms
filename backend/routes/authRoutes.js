@@ -8,6 +8,7 @@ const { getJWTSecret } = require('../utils/jwt');
 const { authLimiter } = require('../config/rateLimit');
 const authMiddleware = require('../middleware/auth');
 const { passwordProblems } = require('../utils/passwordPolicy');
+const { sendPasswordChangedEmail } = require('../utils/emailService');
 const {
   isLocked, lockRemainingMinutes, recordAttempt,
   registerFailure, registerSuccess, rememberPassword, passwordWasUsedBefore
@@ -86,6 +87,19 @@ router.post('/auth/set-password',
       const user = await User.findById(decoded.id);
       if (!user) return res.status(404).json({ message: 'User not found' });
 
+      // A setup JWT is valid for 24 hours, which would otherwise let the same
+      // invitation reset the password twice. A password change after the token
+      // was issued means the link is spent. The one-minute grace covers an
+      // account created with a chosen password, where both timestamps land in
+      // the same second.
+      const issuedAt = decoded.iat ? decoded.iat * 1000 : 0;
+      const changedAt = user.passwordChangedAt ? new Date(user.passwordChangedAt).getTime() : 0;
+      if (changedAt && issuedAt && changedAt - issuedAt > 60 * 1000) {
+        return res.status(400).json({
+          message: 'This setup link has already been used. Ask the school administration to send a new invitation.'
+        });
+      }
+
       const problems = passwordProblems(req.body.password, {
         email: user.email, fullName: user.fullName
       });
@@ -105,6 +119,12 @@ router.post('/auth/set-password',
       user.passwordChangedAt = new Date();
       await rememberPassword(user, hash);
       await user.save();
+
+      // Confirmation mail is best-effort: the password is already changed and
+      // must not be rolled back because Resend is unavailable.
+      sendPasswordChangedEmail(user).catch((error) => {
+        console.error(`Password confirmation email failed for ${user.email}: ${error.message}`);
+      });
 
       res.json({ success: true, message: 'Password set successfully. You can now login.' });
     } catch (error) {
@@ -158,6 +178,10 @@ router.post('/auth/change-password', authLimiter, authMiddleware, async (req, re
     user.passwordChangedAt = new Date();
     await rememberPassword(user, hash);
     await user.save();
+
+    sendPasswordChangedEmail(user).catch((error) => {
+      console.error(`Password confirmation email failed for ${user.email}: ${error.message}`);
+    });
 
     const token = jwt.sign(
       { id: user._id, role: user.role, name: user.fullName, pwd: 0 },
