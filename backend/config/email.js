@@ -33,7 +33,12 @@ const sendMail = async ({ from, to, subject, html, text, replyTo }) => {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.message || `Resend API error: ${response.status}`);
+    // Keep the provider's own message: it usually names the exact problem
+    // (unverified sender domain, invalid recipient, invalid API key, quota).
+    const error = new Error(payload.message || `Resend API error: ${response.status}`);
+    error.status = response.status;
+    error.code = payload.name;
+    throw error;
   }
   return payload;
 };
