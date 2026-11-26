@@ -1,6 +1,9 @@
 // Resend HTTP API client. The rest of the backend keeps calling sendMail(...),
 // so swapping providers does not require changing each email template.
 const RESEND_API_URL = 'https://api.resend.com/emails';
+// A provider that never answers must not hold a request open. Ten seconds is
+// far longer than a normal send and short enough to keep forms responsive.
+const RESEND_TIMEOUT_MS = 10_000;
 
 const getApiKey = () => (process.env.RESEND_API_KEY || '').trim();
 const getFromAddress = () => (process.env.EMAIL_FROM || '').trim();
@@ -17,6 +20,7 @@ const sendMail = async ({ from, to, subject, html, text, replyTo }) => {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
+    signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
     body: JSON.stringify({
       from: from || getFromAddress(),
       to: Array.isArray(to) ? to : [to],
