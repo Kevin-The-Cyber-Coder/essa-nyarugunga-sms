@@ -49,7 +49,7 @@ const frontendBaseUrl = () => {
 const resolveUrl = (value) => {
   const raw = String(value == null ? '' : value).trim();
   if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^(https?:\/\/|mailto:)/i.test(raw)) return raw;
   if (raw.startsWith('/')) return `${frontendBaseUrl()}${raw}`;
   return '';
 };
