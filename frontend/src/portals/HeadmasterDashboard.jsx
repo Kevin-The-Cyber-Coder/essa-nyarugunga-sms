@@ -33,6 +33,10 @@ const statusColor = (s) => {
   if (s === 'rejected') return { color:'#e74c3c', bg:'var(--tint-danger)' };
   return { color:'var(--text-secondary)', bg:'var(--surface-page)' };
 };
+// Used when the API result is placed in a SweetAlert html body.
+const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => (
+  { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+));
 
 // ─── Badge ───────────────────────────────────────────────────────────────────
 const Badge = ({ text, color, bg, size = 11 }) => (
@@ -324,10 +328,20 @@ const HeadmasterDashboard = () => {
     }
     setSaving(true);
     try {
-      await api('/headmaster/create-admin', { method:'POST', body: JSON.stringify(adminForm) });
+      const result = await api('/headmaster/create-admin', { method:'POST', body: JSON.stringify(adminForm) });
+      // Never show a made-up fallback password. The API returns the generated
+      // one, and the invitation email is the preferred way in.
+      const inviteNote = result.inviteSent
+        ? `An activation email with a 24-hour password link was sent to <b>${esc(result.user.email)}</b>.`
+        : 'The account is ready, but the invitation email was not sent. Check the Resend settings, then use <b>Resend</b> in the table.';
+      const passwordNote = !result.inviteSent && result.password
+        ? `<div style="margin-top:10px;">Temporary password: <code>${esc(result.password)}</code></div>`
+        : '';
       Swal.fire({
-        title: '✅ Admin Created!',
-        html: `<p><b>${adminForm.fullName}</b> (${adminForm.role.replace(/_/g, ' ')})<br>Email: <code>${adminForm.email}</code><br>Password: <code>${adminForm.password || 'admin123'}</code></p>`,
+        title: 'Admin Created',
+        html: `<p><b>${esc(adminForm.fullName)}</b> (${esc(adminForm.role.replace(/_/g, ' '))})<br>Email: <code>${esc(result.user.email)}</code></p>
+          <div style="margin-top:12px;padding:12px;border-radius:8px;background:${result.inviteSent ? '#eaf7ef' : '#fff6e0'};font-size:13px;line-height:1.5;">${inviteNote}</div>
+          ${passwordNote}`,
         icon: 'success',
       });
       setAdminModal(false);
@@ -338,6 +352,24 @@ const HeadmasterDashboard = () => {
       Swal.fire('Error', e.message || 'Failed to create admin', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const resendInvite = async (admin) => {
+    const ok = await Swal.fire({
+      title: 'Resend invitation?',
+      text: `A new activation link valid for 24 hours will be emailed to ${admin.email}.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#1a3a5c',
+      confirmButtonText: 'Send invitation',
+    });
+    if (!ok.isConfirmed) return;
+    try {
+      const result = await api(`/headmaster/admins/${admin._id}/resend-invite`, { method: 'POST' });
+      Swal.fire('Invitation Sent', result.message || `The invitation was sent to ${admin.email}.`, 'success');
+    } catch (e) {
+      Swal.fire('Email Not Sent', e.message || 'Unable to send the invitation.', 'error');
     }
   };
 
@@ -735,7 +767,8 @@ const HeadmasterDashboard = () => {
                         color={a.isActive !== false ? '#27ae60' : '#e74c3c'}
                         bg={a.isActive !== false ? '#e8f5e9' : '#fdecea'} /></TD>
                       <TD>
-                        <div style={{ display:'flex', gap:6 }}>
+                        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                          <Btn small icon="fas fa-paper-plane" onClick={() => resendInvite(a)}>Resend</Btn>
                           <Btn small danger icon="fas fa-trash" onClick={() => deleteAdmin(a)}>Delete</Btn>
                         </div>
                       </TD>

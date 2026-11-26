@@ -15,6 +15,9 @@ import { API_URL } from '../config/api';
   // ─── helpers ─────────────────────────────────────────────────────────────────
   const fmt = (d) => d ? new Date(d).toLocaleDateString('en-RW', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
   const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('en-RW', { hour: '2-digit', minute: '2-digit' }) : '';
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => (
+    { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+  ));
 
   const roleBadge = (role) => {
     const map = {
@@ -183,8 +186,16 @@ import { API_URL } from '../config/api';
       if (!teacherForm.fullName || !teacherForm.email) { Swal.fire('Missing Fields', 'Name and Email are required', 'warning'); return; }
       setSaving(true);
       try {
-        await api('/academic-admin/create-teacher-credentials', { method: 'POST', body: JSON.stringify(teacherForm) });
-        Swal.fire('✅ Teacher Created!', `<b>${teacherForm.fullName}</b><br>Email: <code>${teacherForm.email}</code><br>Password: <code>${teacherForm.password || 'teacher123'}</code>`, 'success');
+        const result = await api('/academic-admin/create-teacher-credentials', { method: 'POST', body: JSON.stringify(teacherForm) });
+        const inviteNote = result.inviteSent
+          ? `An activation email with a 24-hour password link was sent to <b>${esc(result.teacher.email || teacherForm.email)}</b>.`
+          : `The account is ready, but the invitation email was not sent. ${result.password ? `Temporary password: <code>${esc(result.password)}</code>` : 'Check the Resend settings.'}`;
+        Swal.fire({
+          title: 'Teacher Created',
+          html: `<b>${esc(teacherForm.fullName)}</b><br>Email: <code>${esc(teacherForm.email)}</code>
+            <div style="margin-top:12px;padding:12px;border-radius:8px;background:${result.inviteSent ? '#eaf7ef' : '#fff6e0'};font-size:13px;line-height:1.5;">${inviteNote}</div>`,
+          icon: 'success'
+        });
         setTeacherModal(false); setTeacherForm({ fullName: '', email: '', password: '', subject: '', phone: '' });
         fetchTeachers();
       } catch (e) { Swal.fire('Error', e.message || 'Failed', 'error'); }
@@ -232,10 +243,14 @@ import { API_URL } from '../config/api';
       if (!studentForm.fullName) { Swal.fire('Missing Fields', 'Student name required', 'warning'); return; }
       setSaving(true);
       try {
-        await api('/academic-admin/students', { method: 'POST', body: JSON.stringify(studentForm) });
+        const result = await api('/academic-admin/students', { method: 'POST', body: JSON.stringify(studentForm) });
+        const inviteNote = result.inviteSent
+          ? `An activation email with a 24-hour password link was sent to <b>${esc(result.student.email || studentForm.email)}</b>.`
+          : `The account is ready, but the invitation email was not sent. ${result.password ? `Temporary password: <code>${esc(result.password)}</code>` : 'Check the Resend settings.'}`;
         Swal.fire({
           title: 'Student Added',
-          html: `<b>${studentForm.fullName}</b> has been added to the portal.<br><small>They can sign in with their assigned credentials and set a new password on first login.</small>`,
+          html: `<b>${esc(studentForm.fullName)}</b> has been added to the portal.
+            <div style="margin-top:12px;padding:12px;border-radius:8px;background:${result.inviteSent ? '#eaf7ef' : '#fff6e0'};font-size:13px;line-height:1.5;">${inviteNote}</div>`,
           icon: 'success'
         });
         setStudentModal(false); setStudentForm({ fullName: '', email: '', classId: '', parentName: '', parentPhone: '' });
@@ -539,7 +554,7 @@ import { API_URL } from '../config/api';
         <Modal open={teacherModal} onClose={() => setTeacherModal(false)} title="Create Teacher Account">
           <Field label="Full Name" required><Inp value={teacherForm.fullName} placeholder="Jean Pierre Habimana" onChange={e => setTeacherForm(p => ({ ...p, fullName: e.target.value }))} /></Field>
           <Field label="Email" required><Inp type="email" value={teacherForm.email} placeholder="teacher@essa.rw" onChange={e => setTeacherForm(p => ({ ...p, email: e.target.value }))} /></Field>
-          <Field label="Password"><Inp type="password" value={teacherForm.password} placeholder="Leave blank for teacher123" onChange={e => setTeacherForm(p => ({ ...p, password: e.target.value }))} /></Field>
+          <Field label="Password"><Inp type="password" value={teacherForm.password} placeholder="Leave blank to email an activation link" onChange={e => setTeacherForm(p => ({ ...p, password: e.target.value }))} /></Field>
           <Field label="Subject"><Inp value={teacherForm.subject} placeholder="e.g. Mathematics" onChange={e => setTeacherForm(p => ({ ...p, subject: e.target.value }))} /></Field>
           <Field label="Phone"><Inp value={teacherForm.phone} placeholder="+250 788 000 000" onChange={e => setTeacherForm(p => ({ ...p, phone: e.target.value }))} /></Field>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
