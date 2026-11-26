@@ -67,10 +67,12 @@ router.post('/headmaster/create-admin', authMiddleware, requireRole(ROLES.HEADMA
     // whether the invitation actually left the building so the UI can tell the
     // Headmaster the truth instead of always claiming an email was sent.
     let inviteSent = false;
+    let inviteError = '';
     try {
       inviteSent = await sendAccountInvitationEmail({ user: newAdmin, inviterName: req.userName });
     } catch (error) {
-      console.error(`Invitation email failed for ${email}: ${error.message}`);
+      inviteError = error.message || 'Resend rejected the invitation.';
+      console.error(`Invitation email failed for ${email}: ${inviteError}`);
     }
 
     res.json({
@@ -80,7 +82,8 @@ router.post('/headmaster/create-admin', authMiddleware, requireRole(ROLES.HEADMA
       // invitation. If the link was sent, the browser has no reason to hold it.
       password: inviteSent ? undefined : finalPassword,
       generated,
-      inviteSent
+      inviteSent,
+      ...(inviteSent ? {} : { inviteError })
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -105,9 +108,11 @@ router.post('/headmaster/admins/:id/resend-invite', authMiddleware, requireRole(
     try {
       sent = await sendAccountInvitationEmail({ user: admin, inviterName: req.userName, reminder: true });
     } catch (error) {
-      console.error(`Invitation resend failed for ${admin.email}: ${error.message}`);
+      const detail = error.message || 'Resend rejected the invitation.';
+      console.error(`Invitation resend failed for ${admin.email}: ${detail}`);
       return res.status(502).json({
-        message: 'The invitation could not be sent. Check the email configuration and try again.'
+        message: 'The invitation could not be sent. Check the email configuration and try again.',
+        detail
       });
     }
     if (!sent) {
