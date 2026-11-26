@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Registered students and newly created teachers and students receive activation emails.
 - Setup links cannot be reused after the account password changes.
 - Duplicate Headmaster admission alert emails were removed.
+- Invitation failures now show Resend's actual rejection message in the admin dialog instead of a generic notice.
 
 ## [1.0.0] - 2026-11-25
 
