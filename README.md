@@ -365,7 +365,7 @@ Step-by-step production setup, environment variables, smoke tests and rollback n
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/` | API status and endpoint hints |
-| `GET` | `/api/health` | Health check for Render/monitoring |
+| `GET` | `/api/health` | Health check, including whether email delivery is configured |
 | `POST` | `/api/auth/login` | Authenticate and receive a JWT |
 | `GET` | `/api/news/public` | Published public news |
 | `GET` | `/api/content/public/:type` | Published public content |

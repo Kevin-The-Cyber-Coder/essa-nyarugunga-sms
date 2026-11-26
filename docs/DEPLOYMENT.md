@@ -157,7 +157,7 @@ curl -X POST https://essa-api.onrender.com/api/auth/login \
   -d '{"email":"admin@essa.rw","password":"admin123"}'
 ```
 
-Expected: health returns `200`, login returns `200` with a token.
+Expected: health returns `200` with `"email": true` when Resend is configured, and login returns `200` with a token. If `email` is `false`, invitations and notifications will not be delivered until `RESEND_API_KEY` and `EMAIL_FROM` are set.
 
 ### Frontend
 

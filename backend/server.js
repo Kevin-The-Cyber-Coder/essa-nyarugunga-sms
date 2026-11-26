@@ -14,6 +14,7 @@ const connectDB = require('./config/database');
 const seedDatabase = require('./utils/seedDatabase');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./config/rateLimit');
+const { isEmailConfigured } = require('./config/email');
 const notifier = require('./utils/notifier');
 const { startReminderScheduler } = require('./utils/reminderScheduler');
 const { startAnnouncementScheduler } = require('./utils/announcementBroadcast');
@@ -78,7 +79,10 @@ const apiStatus = () => ({
   success: true,
   name: 'ESSA Nyarugunga API',
   status: 'ok',
-  frontend: process.env.FRONTEND_URL || PRODUCTION_FRONTEND_URL
+  frontend: process.env.FRONTEND_URL || PRODUCTION_FRONTEND_URL,
+  // Boolean only: never expose the key or sender address. This lets operators
+  // confirm at a glance whether invitations and notifications can be delivered.
+  email: isEmailConfigured()
 });
 
 // Browsers land here when the bare API URL is opened. Keep the answer small and

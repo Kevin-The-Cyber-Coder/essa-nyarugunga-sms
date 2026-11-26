@@ -12,6 +12,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Architecture and deployment documentation.
 - Shared responsive email templates with plain-text alternatives for invitations, password changes, admission updates, contact messages and notifications.
 - Sub-admin invitation resend endpoint and a Resend action in the Headmaster admin table.
+- Health endpoint reports whether email delivery is configured.
 
 ### Changed
 
