@@ -7,7 +7,7 @@ const Student = require('../models/Student');
 const User = require('../models/User');
 const Class = require('../models/Class');
 const ParentProfile = require('../models/ParentProfile');
-const { sendAdmissionDecisionEmail } = require('../utils/emailService');
+const { sendAdmissionDecisionEmail, sendAccountInvitationEmail } = require('../utils/emailService');
 const { rememberPassword } = require('../utils/loginSecurity');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
@@ -415,7 +415,28 @@ router.post('/applications/:id/register', authMiddleware, requireRole(ROLES.ADMI
     });
     await application.save();
 
-    res.json({ success: true, student, password: generatedPassword, generated: true, applicationNumber: application.applicationNumber });
+    // Registration is the first time the student has an account, so this is the
+    // only place their invitation can be sent. Without it the generated
+    // password was returned to the staff screen and the student was never told.
+    let inviteSent = false;
+    try {
+      inviteSent = await sendAccountInvitationEmail({
+        user,
+        inviterName: req.userName,
+        extraRows: [{ label: 'Student ID', value: studentId }]
+      });
+    } catch (error) {
+      console.error(`Student invitation failed for ${application.email}: ${error.message}`);
+    }
+
+    res.json({
+      success: true,
+      student,
+      password: generatedPassword,
+      generated: true,
+      applicationNumber: application.applicationNumber,
+      inviteSent
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
