@@ -272,8 +272,12 @@ const HeadmasterDashboard = () => {
   const api = useCallback(async (path, opts = {}) => {
     const res = await fetch(`${API_URL}/api${path}`, { headers: headers(), ...opts });
     if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error.message || 'Request failed');
+      const payload = await res.json().catch(() => ({}));
+      const error = new Error(payload.message || 'Request failed');
+      // Keep Resend's explanation so the Headmaster sees the real cause
+      // instead of a generic "check settings" message.
+      if (payload.detail) error.detail = payload.detail;
+      throw error;
     }
     return res.json();
   }, []);
@@ -333,14 +337,17 @@ const HeadmasterDashboard = () => {
       // one, and the invitation email is the preferred way in.
       const inviteNote = result.inviteSent
         ? `An activation email with a 24-hour password link was sent to <b>${esc(result.user.email)}</b>.`
-        : 'The account is ready, but the invitation email was not sent. Check the Resend settings, then use <b>Resend</b> in the table.';
+        : `The account is ready, but the invitation email was not sent. ${result.inviteError ? `Resend said: <b>${esc(result.inviteError)}</b>. ` : ''}Fix the email settings, then use <b>Resend</b> in the table.`;
+      const senderHint = /only send testing emails|domain is not verified|not authorized to send emails from/i.test(result.inviteError || '')
+        ? `<div style="margin-top:8px;">Verify your domain in Resend and set <code>EMAIL_FROM</code> to an address on that domain. The shared <code>onboarding@resend.dev</code> sender can only email your own Resend account address.</div>`
+        : '';
       const passwordNote = !result.inviteSent && result.password
         ? `<div style="margin-top:10px;">Temporary password: <code>${esc(result.password)}</code></div>`
         : '';
       Swal.fire({
         title: 'Admin Created',
-        html: `<p><b>${esc(adminForm.fullName)}</b> (${esc(adminForm.role.replace(/_/g, ' '))})<br>Email: <code>${esc(result.user.email)}</code></p>
-          <div style="margin-top:12px;padding:12px;border-radius:8px;background:${result.inviteSent ? '#eaf7ef' : '#fff6e0'};font-size:13px;line-height:1.5;">${inviteNote}</div>
+        html: `<p style="margin:0 0 12px;"><b>${esc(adminForm.fullName)}</b> (${esc(adminForm.role.replace(/_/g, ' '))})<br>Email: <code>${esc(result.user.email)}</code></p>
+          <div style="padding:12px;border-radius:8px;background:${result.inviteSent ? '#eaf7ef' : '#fff6e0'};font-size:13px;line-height:1.5;">${inviteNote}${senderHint}</div>
           ${passwordNote}`,
         icon: 'success',
       });
@@ -369,7 +376,13 @@ const HeadmasterDashboard = () => {
       const result = await api(`/headmaster/admins/${admin._id}/resend-invite`, { method: 'POST' });
       Swal.fire('Invitation Sent', result.message || `The invitation was sent to ${admin.email}.`, 'success');
     } catch (e) {
-      Swal.fire('Email Not Sent', e.message || 'Unable to send the invitation.', 'error');
+      const detail = e.detail || '';
+      Swal.fire({
+        title: 'Email Not Sent',
+        html: `<div>${esc(e.message || 'Unable to send the invitation.')}</div>
+          ${detail ? `<div style="margin-top:10px;padding:10px;border-radius:8px;background:var(--surface-page);font-size:13px;">Resend said: <b>${esc(detail)}</b></div>` : ''}`,
+        icon: 'error'
+      });
     }
   };
 
