@@ -14,7 +14,7 @@ const Income = require('../models/Income');
 const Expense = require('../models/Expense');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
-const { sendWelcomeEmail } = require('../utils/emailService');
+const { sendAccountInvitationEmail } = require('../utils/emailService');
 const { paginate, respondList } = require('../utils/paginate');
 const { ROLES, CREATABLE_ADMIN_ROLES } = require('../config/roles');
 
@@ -63,13 +63,58 @@ router.post('/headmaster/create-admin', authMiddleware, requireRole(ROLES.HEADMA
     await rememberPassword(newAdmin, hashedPassword);
     await newAdmin.save();
 
-    sendWelcomeEmail({ _id: newAdmin._id, fullName, email, role }).catch(console.error);
+    // The account exists even if Resend is down or not configured yet. Report
+    // whether the invitation actually left the building so the UI can tell the
+    // Headmaster the truth instead of always claiming an email was sent.
+    let inviteSent = false;
+    try {
+      inviteSent = await sendAccountInvitationEmail({ user: newAdmin, inviterName: req.userName });
+    } catch (error) {
+      console.error(`Invitation email failed for ${email}: ${error.message}`);
+    }
+
     res.json({
       success: true,
       user: { _id: newAdmin._id, fullName, email, role },
       password: finalPassword,
-      generated
+      generated,
+      inviteSent
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Re-issues the first-login link. This is also the controlled password-reset
+// path for a sub-admin: the link is the only credential in the message and it
+// expires after 24 hours.
+router.post('/headmaster/admins/:id/resend-invite', authMiddleware, requireRole(ROLES.HEADMASTER), async (req, res) => {
+  try {
+    const admin = await User.findById(req.params.id).select('fullName email role isActive');
+    if (!admin) return res.status(404).json({ message: 'Admin not found' });
+    if (!CREATABLE_ADMIN_ROLES.includes(admin.role)) {
+      return res.status(400).json({ message: 'Only sub-admin accounts can receive an invitation' });
+    }
+    if (admin.isActive === false) {
+      return res.status(409).json({ message: 'Reactivate this account before sending an invitation' });
+    }
+
+    let sent = false;
+    try {
+      sent = await sendAccountInvitationEmail({ user: admin, inviterName: req.userName, reminder: true });
+    } catch (error) {
+      console.error(`Invitation resend failed for ${admin.email}: ${error.message}`);
+      return res.status(502).json({
+        message: 'The invitation could not be sent. Check the email configuration and try again.'
+      });
+    }
+    if (!sent) {
+      return res.status(503).json({
+        message: 'Email delivery is not configured. Set RESEND_API_KEY and EMAIL_FROM, then try again.'
+      });
+    }
+
+    res.json({ success: true, message: `Invitation sent to ${admin.email}`, inviteSent: true });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
