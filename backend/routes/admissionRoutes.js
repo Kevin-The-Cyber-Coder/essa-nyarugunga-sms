@@ -4,7 +4,7 @@ const { body, validationResult } = require('express-validator');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const Student = require('../models/Student');
 const User = require('../models/User');
-const { sendAdmissionConfirmationEmail, sendNotificationEmail } = require('../utils/emailService');
+const { sendAdmissionConfirmationEmail } = require('../utils/emailService');
 const { publicFormLimiter } = require('../config/rateLimit');
 const { notify } = require('../utils/notifier');
 const { ROLES } = require('../config/roles');
@@ -37,9 +37,16 @@ const findDuplicate = async ({ email, phone, nationalId }) => {
 const alertHeadmasters = async (application) => {
   const headmasters = await User.find({ role: ROLES.HEADMASTER, isActive: true }).select('_id fullName email').lean();
   await Promise.all(headmasters.map(async (head) => {
-    const details = { title: 'New admission application', body: `${application.fullName} (${application.applicationNumber})`, link: '/portal/headmaster' };
-    await notify({ userId: head._id, type: 'admission', ...details });
-    if (head.email) await sendNotificationEmail(head, details);
+    // notify() already delivers the in-app record and, when the recipient's
+    // settings allow it, the email. Calling the email service again here sent
+    // every Headmaster two copies of the same alert.
+    await notify({
+      userId: head._id,
+      type: 'admission',
+      title: 'New admission application',
+      body: `${application.fullName} (${application.applicationNumber})`,
+      link: '/portal/headmaster'
+    });
   }));
 };
 
