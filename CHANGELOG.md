@@ -10,6 +10,20 @@ All notable changes to this project are documented here. The format follows [Kee
 - Dependabot configuration for backend, frontend and GitHub Actions dependencies.
 - Issue templates, pull request template, security policy, contribution guide and code of conduct.
 - Architecture and deployment documentation.
+- Shared responsive email templates with plain-text alternatives for invitations, password changes, admission updates, contact messages and notifications.
+- Sub-admin invitation resend endpoint and a Resend action in the Headmaster admin table.
+
+### Changed
+
+- Account invitations use a single-use 24-hour password link; generated passwords are never included in email.
+- Contact form submissions now send the visitor an acknowledgement as well as the office alert.
+
+### Fixed
+
+- Approved and rejected admission decisions now email applicants; the previous copy map used statuses that never occurred.
+- Registered students and newly created teachers and students receive activation emails.
+- Setup links cannot be reused after the account password changes.
+- Duplicate Headmaster admission alert emails were removed.
 
 ## [1.0.0] - 2026-11-25
 
