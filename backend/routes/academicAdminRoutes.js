@@ -15,7 +15,7 @@ const FeePayment = require('../models/FeePayment');
 const Invoice = require('../models/Invoice');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
-const { sendWelcomeEmail } = require('../utils/emailService');
+const { sendAccountInvitationEmail } = require('../utils/emailService');
 const { paginate, respondList } = require('../utils/paginate');
 const { studentScopeFilter, classScopeFilter, STAFF_ROLES } = require('../utils/access');
 
@@ -58,8 +58,17 @@ router.post('/academic-admin/create-teacher-credentials', authMiddleware, requir
     await rememberPassword(teacherUser, hashedPassword);
     await teacherUser.save();
     const teacherProfile = await TeacherProfile.create({ userId: teacherUser._id, fullName, email, subject: subject || 'General', phone: phone || '' });
-    sendWelcomeEmail({ _id: teacherUser._id, fullName, email, role: 'teacher' }).catch(console.error);
-    res.json({ success: true, teacher: teacherProfile, password: finalPassword, generated });
+    let inviteSent = false;
+    try {
+      inviteSent = await sendAccountInvitationEmail({
+        user: teacherUser,
+        inviterName: req.userName,
+        extraRows: [{ label: 'Subject', value: subject || 'General' }]
+      });
+    } catch (error) {
+      console.error(`Teacher invitation failed for ${email}: ${error.message}`);
+    }
+    res.json({ success: true, teacher: teacherProfile, password: finalPassword, generated, inviteSent });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -228,8 +237,17 @@ router.post('/academic-admin/students', authMiddleware, requireRole('academic_ad
       await Class.findByIdAndUpdate(studentFields.classId, { $addToSet: { students: student._id } });
     }
 
-    sendWelcomeEmail({ _id: studentUser._id, fullName: studentUser.fullName, email, role: 'student' }).catch(console.error);
-    res.json({ success: true, student, password: finalPassword, generated });
+    let inviteSent = false;
+    try {
+      inviteSent = await sendAccountInvitationEmail({
+        user: studentUser,
+        inviterName: req.userName,
+        extraRows: [{ label: 'Student ID', value: studentId }]
+      });
+    } catch (error) {
+      console.error(`Student invitation failed for ${email}: ${error.message}`);
+    }
+    res.json({ success: true, student, password: finalPassword, generated, inviteSent });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
