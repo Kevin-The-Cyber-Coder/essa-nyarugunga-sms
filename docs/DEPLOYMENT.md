@@ -83,8 +83,11 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 RESEND_API_KEY=re_your_resend_api_key
 EMAIL_FROM=ESSA Nyarugunga <no-reply@your-verified-domain>
 ADMIN_EMAIL=admin@essa.rw
+EMAIL_REPLY_TO=admin@essa.rw
 TEST_EMAIL=admin@essa.rw
 ```
+
+`EMAIL_REPLY_TO` is optional. When set, replies to invitations, admission updates and password notices go to that address. Contact-form acknowledgements reply to it; contact-form alerts reply directly to the visitor.
 
 - Create the API key at <https://resend.com/api-keys> with send permission.
 - Verify the sender domain at <https://resend.com/domains>.

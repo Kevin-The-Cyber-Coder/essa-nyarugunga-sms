@@ -135,6 +135,8 @@ There is no standalone CMS route. The shared content editor is embedded only in 
 
 - Delivery channels: **in-app notifications and email only**.
 - Resend provides transactional email; no SMS, push or chat provider is used.
+- Every message uses one responsive, branded template with a plain-text alternative: account invitations, password changes, admission receipts and decisions, contact confirmations and portal notifications.
+- Sub-admin invitations carry a single-use, 24-hour password link. The Headmaster can resend it from the admin table; the generated password is never emailed.
 - Cloudinary stores uploaded images and files in production, with local disk as a development fallback.
 - Uploaded news/gallery images, profile photos, assignment files, submissions and class resources all share one storage adapter.
 
