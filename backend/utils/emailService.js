@@ -2,105 +2,118 @@ const jwt = require('jsonwebtoken');
 
 const { sendMail, isEmailConfigured, getFromAddress } = require('../config/email');
 const { getJWTSecret } = require('./jwt');
+const { ROLE_LABELS } = require('../config/roles');
+const templates = require('./emailTemplates');
 
-const PRODUCTION_FRONTEND_URL = 'https://essa-nyarugunga-school-complex-syst-eta.vercel.app';
-const frontendUrl = (process.env.FRONTEND_URL || '')
-  .split(',')[0]
-  .trim() || PRODUCTION_FRONTEND_URL;
+const { frontendBaseUrl } = templates;
+
+// Invitation links expire quickly because they are a password-reset primitive:
+// anyone who reads the mailbox can use them once.
+const SETUP_TOKEN_HOURS = 24;
+
+const replyToAddress = () =>
+  (process.env.EMAIL_REPLY_TO || process.env.ADMIN_EMAIL || '').trim() || undefined;
+
+const roleLabel = (role) => ROLE_LABELS[role] || 'School';
 
 const buildSetupLink = (userId) => {
-  const token = jwt.sign({ id: userId, purpose: 'setup' }, getJWTSecret(), { expiresIn: '24h' });
-  const baseUrl = frontendUrl;
-  return `${baseUrl}/set-password?token=${token}`;
+  const token = jwt.sign({ id: userId, purpose: 'setup' }, getJWTSecret(), {
+    expiresIn: `${SETUP_TOKEN_HOURS}h`
+  });
+  return `${frontendBaseUrl()}/set-password?token=${token}`;
 };
 
-const sendWelcomeEmail = async (user) => {
-  if (!isEmailConfigured()) return;
-  const setupLink = user._id ? buildSetupLink(user._id) : null;
+// One guarded entry point. Every send returns true only when Resend accepted
+// the message, so callers can tell the UI the truth instead of assuming.
+const sendTemplated = async ({ to, template, replyTo }) => {
+  if (!isEmailConfigured() || !to || !template) return false;
   await sendMail({
     from: getFromAddress(),
+    to,
+    subject: template.subject,
+    html: template.html,
+    text: template.text,
+    replyTo
+  });
+  return true;
+};
+
+// Sent when the Headmaster creates a sub-admin, the Academic Administrator
+// creates a teacher, a student account is created, or an invitation is resent.
+// The generated password is deliberately never included: the only credential in
+// the message is a single-use link that expires.
+const sendAccountInvitationEmail = async ({
+  user,
+  inviterName = '',
+  reminder = false,
+  extraRows = []
+}) => {
+  // Check delivery first: without Resend credentials there is no reason to mint
+  // a setup token, and doing so would throw in environments without JWT_SECRET.
+  if (!isEmailConfigured() || !user || !user.email) return false;
+  const setupUrl = user._id ? buildSetupLink(user._id) : '';
+  if (!setupUrl) return false;
+
+  return sendTemplated({
     to: user.email,
-    subject: `Welcome to ESSA Nyarugunga Portal, ${user.fullName}!`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-      <div style="background:linear-gradient(135deg,#1a3a5c,#2c5f8a);color:white;padding:30px;text-align:center;border-radius:10px 10px 0 0;">
-        <h2>🎓 Welcome to ESSA Nyarugunga Portal</h2></div>
-      <div style="background:#f5f5f5;padding:30px;border-radius:0 0 10px 10px;">
-        <h3>Dear ${user.fullName},</h3>
-        <p>Your account has been created successfully.</p>
-        <div style="background:white;padding:15px;border-radius:8px;border-left:4px solid #ffc107;">
-          <p><strong>Email:</strong> ${user.email}</p>
-          <p><strong>Role:</strong> ${user.role?.toUpperCase()}</p>
-        </div>
-        ${setupLink ? `
-        <p style="margin-top:16px;">To set your password and activate your account, click the button below:</p>
-        <p style="text-align:center;margin:20px 0;">
-          <a href="${setupLink}" style="background:#1a3a5c;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Set Your Password</a>
-        </p>
-        <p style="font-size:12px;color:#777;">This link is valid for 24 hours. If it expires, please contact the school administration.</p>` : ''}
-        <p>Best regards,<br><strong>ESSA Nyarugunga Administration</strong></p>
-      </div></div>`
+    template: templates.accountInvitation({
+      fullName: user.fullName,
+      email: user.email,
+      roleLabel: roleLabel(user.role),
+      setupUrl,
+      expiresInHours: SETUP_TOKEN_HOURS,
+      inviterName,
+      reminder,
+      extraRows
+    }),
+    replyTo: replyToAddress()
+  });
+};
+
+// Backwards-compatible name used by the existing route modules.
+const sendWelcomeEmail = (user, options = {}) => sendAccountInvitationEmail({ user, ...options });
+
+const sendPasswordChangedEmail = async (user, at = new Date()) => {
+  if (!user || !user.email) return false;
+  return sendTemplated({
+    to: user.email,
+    template: templates.passwordChanged({ fullName: user.fullName, email: user.email, at }),
+    replyTo: replyToAddress()
   });
 };
 
 const sendAdmissionConfirmationEmail = async (application) => {
-  if (!isEmailConfigured()) return;
-  await sendMail({
-    from: getFromAddress(),
+  if (!application || !application.email) return false;
+  return sendTemplated({
     to: application.email,
-    subject: `🎓 Admission Application Received - ESSA Nyarugunga`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-      <div style="background:linear-gradient(135deg,#1a3a5c,#2c5f8a);color:white;padding:20px;text-align:center;"><h2>Application Received!</h2></div>
-      <div style="padding:20px;background:#f5f5f5;">
-        <h3>Dear ${application.fullName},</h3>
-        <p>Application Number: <strong>${application.applicationNumber}</strong></p>
-        <p>Status: Pending Review. We'll contact you within 3–5 business days.</p>
-      </div></div>`
+    template: templates.admissionReceived({
+      fullName: application.fullName,
+      applicationNumber: application.applicationNumber,
+      level: application.level,
+      submittedAt: application.createdAt || new Date()
+    }),
+    replyTo: replyToAddress()
   });
 };
 
-// Sent when an admin records a decision on an application. The internal note the
-// reviewer types is deliberately not included: reviewNotes exists for staff, and
-// putting it in applicant-facing mail would leak panel deliberations.
-const DECISION_COPY = {
-  shortlisted: {
-    subject: '🎓 You have been shortlisted - ESSA Nyarugunga',
-    heading: 'You have been shortlisted',
-    body: 'Thank you for applying. The admissions panel has shortlisted your application and will contact you shortly with the next steps.'
-  },
-  accepted: {
-    subject: '🎓 Application accepted - ESSA Nyarugunga',
-    heading: 'Congratulations - your application was accepted',
-    body: 'Thank you for applying. We are pleased to tell you that your application has been accepted. Our office will contact you with enrolment details.'
-  },
-  waitlisted: {
-    subject: '🎓 Application waitlisted - ESSA Nyarugunga',
-    heading: 'Your application is on the waiting list',
-    body: 'Thank you for applying. Your application is currently on the waiting list. We will be in touch if a place becomes available.'
-  },
-  rejected: {
-    subject: '🎓 Update on your application - ESSA Nyarugunga',
-    heading: 'Update on your application',
-    body: 'Thank you for taking the time to apply. We are unable to offer you a place this year.'
-  }
-};
-
+// Sent when an admin records a final decision. The internal review note is
+// deliberately not included: putting panel deliberations in applicant mail
+// leaks staff-only context. Returns false for internal statuses.
 const sendAdmissionDecisionEmail = async (application) => {
-  if (!isEmailConfigured()) return;
-  const copy = DECISION_COPY[application.status];
-  // Only the four decided states have something to announce; "reviewing" is an
-  // internal working state and "pending" already got a confirmation email.
-  if (!copy) return;
-  await sendMail({
-    from: getFromAddress(),
+  if (!application || !application.email) return false;
+  const template = templates.admissionDecision({
+    fullName: application.fullName,
+    applicationNumber: application.applicationNumber,
+    level: application.level,
+    status: application.status,
+    decidedAt: application.reviewedAt || application.updatedAt || new Date()
+  });
+  if (!template) return false;
+
+  return sendTemplated({
     to: application.email,
-    subject: copy.subject,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-      <div style="background:linear-gradient(135deg,#1a3a5c,#2c5f8a);color:white;padding:20px;text-align:center;"><h2>${copy.heading}</h2></div>
-      <div style="padding:20px;background:#f5f5f5;">
-        <h3>Dear ${application.fullName},</h3>
-        <p>Application Number: <strong>${application.applicationNumber}</strong></p>
-        <p>${copy.body}</p>
-      </div></div>`
+    template,
+    replyTo: replyToAddress()
   });
 };
 
@@ -108,30 +121,65 @@ const sendAdmissionDecisionEmail = async (application) => {
 // the rest of this module: with no Resend credentials configured the app must
 // keep working and simply not send.
 const sendNotificationEmail = async (user, { title, body, link }) => {
-  if (!isEmailConfigured() || !user || !user.email) return false;
-  const origin = frontendUrl;
-  const action = link
-    ? `<p style="text-align:center;margin:24px 0;">
-         <a href="${link.startsWith('http') ? link : origin + link}"
-            style="background:#1a3a5c;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Open</a>
-       </p>`
-    : '';
-
-  await sendMail({
-    from: getFromAddress(),
+  if (!user || !user.email) return false;
+  return sendTemplated({
     to: user.email,
-    subject: title,
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-      <div style="background:linear-gradient(135deg,#1a3a5c,#2c5f8a);color:white;padding:24px;text-align:center;border-radius:10px 10px 0 0;">
-        <h2>${title}</h2></div>
-      <div style="background:#f5f5f5;padding:24px;border-radius:0 0 10px 10px;">
-        <p style="white-space:pre-wrap;">${body || ''}</p>
-        ${action}
-        <p style="font-size:12px;color:#777;">You are receiving this because of your notification settings in the portal.</p>
-      </div></div>`
+    template: templates.notification({ fullName: user.fullName, title, body, link }),
+    replyTo: replyToAddress()
   });
-  return true;
 };
 
-const module_exports = { sendWelcomeEmail, sendAdmissionConfirmationEmail, sendAdmissionDecisionEmail, sendNotificationEmail };
-module.exports = module_exports;
+const sendContactAcknowledgementEmail = async (contact) => {
+  if (!contact || !contact.email) return false;
+  return sendTemplated({
+    to: contact.email,
+    template: templates.contactAcknowledgement({
+      fullName: contact.fullName,
+      subject: contact.subject,
+      message: contact.message,
+      sentAt: contact.createdAt || new Date()
+    }),
+    replyTo: replyToAddress()
+  });
+};
+
+const sendContactAlertEmail = async (contact) => {
+  const recipient = (process.env.ADMIN_EMAIL || '').trim() || 'admin@essa.rw';
+  if (!contact || !recipient) return false;
+  return sendTemplated({
+    to: recipient,
+    template: templates.contactAlert({
+      fullName: contact.fullName,
+      email: contact.email,
+      phone: contact.phone,
+      subject: contact.subject,
+      message: contact.message,
+      sentAt: contact.createdAt || new Date()
+    }),
+    // Replying to the alert answers the visitor, not the school's own inbox.
+    replyTo: contact.email || replyToAddress()
+  });
+};
+
+const sendTestEmail = async (to) => {
+  const recipient = to || process.env.TEST_EMAIL || process.env.ADMIN_EMAIL || getFromAddress();
+  return sendTemplated({
+    to: recipient,
+    template: templates.emailTest({ from: getFromAddress(), to: recipient })
+  });
+};
+
+module.exports = {
+  buildSetupLink,
+  sendTemplated,
+  sendAccountInvitationEmail,
+  sendWelcomeEmail,
+  sendPasswordChangedEmail,
+  sendAdmissionConfirmationEmail,
+  sendAdmissionDecisionEmail,
+  sendNotificationEmail,
+  sendContactAcknowledgementEmail,
+  sendContactAlertEmail,
+  sendTestEmail,
+  SETUP_TOKEN_HOURS
+};
