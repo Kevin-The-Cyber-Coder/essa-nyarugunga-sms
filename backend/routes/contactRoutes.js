@@ -2,7 +2,8 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 
 const Contact = require('../models/Contact');
-const { sendMail, isEmailConfigured, getFromAddress } = require('../config/email');
+const { isEmailConfigured } = require('../config/email');
+const { sendContactAlertEmail, sendContactAcknowledgementEmail } = require('../utils/emailService');
 const authMiddleware = require('../middleware/auth');
 const requireRole = require('../middleware/roleCheck');
 const { publicFormLimiter } = require('../config/rateLimit');
@@ -20,14 +21,21 @@ router.post('/contact/submit', publicFormLimiter,
     try {
       const { fullName, email, phone, subject, message } = req.body;
       const contact = await Contact.create({ fullName, email: email.toLowerCase(), phone, subject, message });
+
+      // The office alert and the visitor's confirmation are independent: one
+      // failing must not stop the other, and neither may fail the submission.
       if (isEmailConfigured()) {
-        sendMail({
-          from: getFromAddress(),
-          to: process.env.ADMIN_EMAIL || 'admin@essa.rw',
-          subject: `📬 New Contact from ${fullName}`,
-          html: `<p><b>Name:</b> ${fullName}</p><p><b>Email:</b> ${email}</p><p><b>Phone:</b> ${phone || '-'}</p><p><b>Subject:</b> ${subject || '-'}</p><p><b>Message:</b> ${message}</p>`
-        }).catch(console.error);
+        const results = await Promise.allSettled([
+          sendContactAlertEmail(contact),
+          sendContactAcknowledgementEmail(contact)
+        ]);
+        results.forEach((result) => {
+          if (result.status === 'rejected') {
+            console.error(`Contact email failed: ${result.reason?.message || result.reason}`);
+          }
+        });
       }
+
       res.json({ success: true, message: 'Message sent successfully!' });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
